@@ -13,6 +13,13 @@ licenses(["notice"])
 rtlmeter_design(
     name = "VeeR-EL2",
     cases = CASES,
+    unsupported = {
+        # Icarus Verilog 13.0: interface ports with modports (el2_mem_if.veer_sram_src), which Icarus does not support.
+        "iverilog": (
+            "Errors in port declarations",
+            "interface ports with modports (el2_mem_if.veer_sram_src), which Icarus does not support",
+        ),
+    },
 )
 
 # cases.bzl must be what //tools:rtlmeter_import writes from descriptor.yaml.

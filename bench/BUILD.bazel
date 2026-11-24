@@ -5,7 +5,10 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 # made by rtlmeter_design() (rtlmeter.bzl) in each design's package, from
 # rtlmeter_case.sh; timed runs use the same script.
 
-exports_files(["rtlmeter_case.sh"])
+exports_files([
+    "expect_unsupported.sh",
+    "rtlmeter_case.sh",
+])
 
 # RTLMeter's harness names the main clock as $root.<clock>. Icarus Verilog
 # does not support $root, so it gets this copy, made from the unchanged

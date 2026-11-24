@@ -13,6 +13,13 @@ licenses(["notice"])
 rtlmeter_design(
     name = "Servant",
     cases = CASES,
+    unsupported = {
+        # Icarus Verilog 13.0: serv_state.v uses trap_pending before its declaration, which Icarus rejects.
+        "iverilog": (
+            "Check for declaration after use",
+            "serv_state.v uses trap_pending before its declaration, which Icarus rejects",
+        ),
+    },
 )
 
 # cases.bzl must be what //tools:rtlmeter_import writes from descriptor.yaml.

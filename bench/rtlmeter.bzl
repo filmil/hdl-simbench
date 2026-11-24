@@ -59,7 +59,7 @@ def _quote(s):
     # Bazel splits test args as a Bourne shell would.
     return "'" + s.replace("'", "'\\''") + "'"
 
-def rtlmeter_design(name, cases, simulators = None, ci_max_cycles = CI_MAX_CYCLES):
+def rtlmeter_design(name, cases, simulators = None, ci_max_cycles = CI_MAX_CYCLES, unsupported = {}):
     """One sh_test per configuration, test and simulator.
 
     Args:
@@ -68,14 +68,20 @@ def rtlmeter_design(name, cases, simulators = None, ci_max_cycles = CI_MAX_CYCLE
       simulators: which simulators to make tests for; all by default.
       ci_max_cycles: cases longer than this are "manual" and "long"; a tiny
         design can afford more cycles in CI.
+      unsupported: {simulator: (error text, reason)} for simulators that
+        cannot run the design. No cases are made for them; instead one test,
+        <simulator>_unsupported_test, checks that the first case still fails
+        with that error text, so that a simulator gaining support is noticed.
     """
     sims = simulators or _SIMULATORS.keys()
+    first = None
     for config, c in cases.items():
         for test, t in c["tests"].items():
             for sim in sims:
                 s = _SIMULATORS[sim]
                 if c["cpp_srcs"] and not s.cpp:
                     continue
+                skip = sim in unsupported
                 args = ["--sim", sim] + s.args + ["--top", c["top"]]
                 if t["expected_cycles"] != None:
                     args += ["--cycles", str(t["expected_cycles"])]
@@ -107,6 +113,11 @@ def rtlmeter_design(name, cases, simulators = None, ci_max_cycles = CI_MAX_CYCLE
                 args.append("$(rootpath %s)" % s.harness)
                 long = t["expected_cycles"] == None or t["expected_cycles"] > ci_max_cycles
                 data = depset(data).to_list()
+                if skip:
+                    if first == None or sim not in first:
+                        first = (first or {})
+                        first[sim] = struct(args = args, data = data)
+                    continue
                 sh_test(
                     name = "%s_%s_%s_test" % (config, test, sim),
                     size = "enormous" if long else "medium",
@@ -132,3 +143,16 @@ def rtlmeter_design(name, cases, simulators = None, ci_max_cycles = CI_MAX_CYCLE
                         tags = ["rtlmeter", sim, "smoke"],
                         target_compatible_with = s.compatible,
                     )
+
+    for sim, (text, reason) in unsupported.items():
+        if sim not in (first or {}):
+            continue
+        sh_test(
+            name = "%s_unsupported_test" % sim,
+            size = "medium",
+            srcs = ["//bench:expect_unsupported.sh"],
+            args = [_quote(text), "$(rootpath //bench:rtlmeter_case.sh)"] + first[sim].args,
+            data = first[sim].data + ["//bench:rtlmeter_case.sh"],
+            tags = ["rtlmeter", sim, "unsupported"],
+            target_compatible_with = _SIMULATORS[sim].compatible,
+        )
