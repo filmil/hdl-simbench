@@ -1,0 +1,9 @@
+# The custom registry first, for the filmil modules (for example
+# bazel_toolchains_verilator), then the BCR. "common", not "build", so that
+# query, mod and fetch resolve modules the same way builds do.
+common --registry=https://raw.githubusercontent.com/filmil/bazel-registry/main
+common --registry=https://bcr.bazel.build
+
+test --test_output=errors
+
+try-import %workspace%/user.bazelrc

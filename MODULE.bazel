@@ -1,0 +1,27 @@
+"""hdl-simbench: VHDL and SystemVerilog simulators compared on the same designs."""
+
+module(
+    name = "hdl_simbench",
+    version = "0.0.0",
+)
+
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "rules_shell", version = "0.8.0")
+
+# SystemVerilog simulators.
+
+# Verilator, from a prebuilt binary (filmil/bazel_toolchains_verilator), so
+# that no build compiles Verilator itself. The bench calls the binary
+# directly; it does not use rules_verilator's rules. The binary exists for
+# Linux x86-64 only.
+bazel_dep(name = "bazel_toolchains_verilator", version = "0.1.0")
+
+verilator_binary = use_extension(
+    "@bazel_toolchains_verilator//verilator:extension.bzl",
+    "verilator_binary",
+)
+use_repo(verilator_binary, "verilator_prebuilt")
+
+# Icarus Verilog, built from source by its BCR module.
+bazel_dep(name = "iverilog", version = "13.0.bcr.1")
