@@ -12,6 +12,12 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 # they are tagged "manual" (so "bazel test //..." skips them) and "long".
 CI_MAX_CYCLES = 100000
 
+# Each long case also gets a smoke test that CI runs: the same compile and
+# files, stopped after this many cycles by RTLMeter's own +max_cycles. As in
+# RTLMeter, a run stopped that way skips the cycle check and the post hook;
+# it must print the harness's "+max_cycles reached" line instead.
+SMOKE_CYCLES = 20000
+
 _SIMULATORS = {
     "verilator": struct(
         args = ["--tool", "$(rootpath @verilator_prebuilt//:verilator)"],
@@ -100,12 +106,29 @@ def rtlmeter_design(name, cases, simulators = None, ci_max_cycles = CI_MAX_CYCLE
                 args += ["--"] + ["$(rootpath %s)" % f for f in c["srcs"]]
                 args.append("$(rootpath %s)" % s.harness)
                 long = t["expected_cycles"] == None or t["expected_cycles"] > ci_max_cycles
+                data = depset(data).to_list()
                 sh_test(
                     name = "%s_%s_%s_test" % (config, test, sim),
                     size = "enormous" if long else "medium",
                     srcs = ["//bench:rtlmeter_case.sh"],
                     args = args,
-                    data = depset(data).to_list(),
+                    data = data,
                     tags = ["rtlmeter", sim] + (["manual", "long"] if long else []),
                     target_compatible_with = s.compatible,
                 )
+                if long:
+                    sh_test(
+                        name = "%s_%s_%s_smoke_test" % (config, test, sim),
+                        size = "medium",
+                        srcs = ["//bench:rtlmeter_case.sh"],
+                        args = [
+                            "--smoke",
+                            "--plusarg",
+                            "+max_cycles=%d" % SMOKE_CYCLES,
+                            "--expect",
+                            _quote("RTLMeter: +max_cycles reached, exiting"),
+                        ] + args,
+                        data = data,
+                        tags = ["rtlmeter", sim, "smoke"],
+                        target_compatible_with = s.compatible,
+                    )

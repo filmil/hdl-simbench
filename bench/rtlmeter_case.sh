@@ -25,12 +25,14 @@
 #       [--verilator-arg ARG]... [--plusarg +x=y]... [--expect <text>]...
 #       [--include <file>]... [--file <file>]... [--post-hook <script>]
 #       [--cpp-src <file>]... (DPI-C sources; Verilator only)
+#       [--smoke]   (a run cut short by +max_cycles: as in RTLMeter, no
+#                    cycle check and no post hook)
 #       [--timing <file>]
 #       -- <source files>...
 
 set -euo pipefail
 
-sim="" tool="" tool2="" vroot="" ivlbase="" top="" cycles="" timing="" posthook=""
+sim="" tool="" tool2="" vroot="" ivlbase="" top="" cycles="" timing="" posthook="" smoke=""
 defines=() params=() vargs=() plusargs=() expects=() includes=() files=() cpps=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -50,6 +52,7 @@ while [[ $# -gt 0 ]]; do
     --file) files+=("$2"); shift 2 ;;
     --post-hook) posthook="$2"; shift 2 ;;
     --cpp-src) cpps+=("$2"); shift 2 ;;
+    --smoke) smoke=1; shift ;;
     --timing) timing="$2"; shift 2 ;;
     --) shift; break ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -167,6 +170,7 @@ if [[ $status -ne 0 ]]; then
   exit 1
 fi
 
+if [[ -n "$smoke" ]]; then posthook="" cycles=""; fi
 if [[ -n "$posthook" ]]; then
   if ! bash "$posthook" > _execute/posthook.log 2>&1; then
     cat _execute/posthook.log >&2
