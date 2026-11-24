@@ -15,6 +15,7 @@
 # Usage:
 #   rtlmeter_case.sh --sim verilator|iverilog
 #       --tool <simulator binary> [--tool2 <vvp, for iverilog>]
+#       [--ivl-base <iverilog's base directory>] [--incdir <dir>]...
 #       [--verilator-root <dir holding include/>]
 #       --top <module> --clock <hierarchical clock, e.g. top.clk>
 #       --cycles <expected cycles> [--define NAME[=VALUE]]...
@@ -23,14 +24,16 @@
 
 set -euo pipefail
 
-sim="" tool="" tool2="" vroot="" top="" clock="" cycles="" timing=""
-defines=() plusargs=() expects=()
+sim="" tool="" tool2="" vroot="" ivlbase="" top="" clock="" cycles="" timing=""
+defines=() plusargs=() expects=() extra_incdirs=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --sim) sim="$2"; shift 2 ;;
     --tool) tool="$2"; shift 2 ;;
     --tool2) tool2="$2"; shift 2 ;;
     --verilator-root) vroot="$2"; shift 2 ;;
+    --ivl-base) ivlbase="$2"; shift 2 ;;
+    --incdir) extra_incdirs+=("$2"); shift 2 ;;
     --top) top="$2"; shift 2 ;;
     --clock) clock="$2"; shift 2 ;;
     --cycles) cycles="$2"; shift 2 ;;
@@ -53,6 +56,7 @@ abs() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s/%s' "$PWD" "$1" ;; es
 tool="$(abs "$tool")"
 [[ -n "$tool2" ]] && tool2="$(abs "$tool2")"
 [[ -n "$vroot" ]] && vroot="$(abs "$vroot")"
+[[ -n "$ivlbase" ]] && ivlbase="$(abs "$ivlbase")"
 asrcs=()
 incdirs=()
 for s in "${srcs[@]}"; do
@@ -60,8 +64,15 @@ for s in "${srcs[@]}"; do
   asrcs+=("$a")
   incdirs+=("$(dirname "$a")")
 done
-# The include file "__rtlmeter_top_include.vh" sits beside the harness
-# sources, so every source directory is an include directory.
+# Every source directory is an include directory, and so is each --incdir
+# (for example the one holding "__rtlmeter_top_include.vh", which designs
+# include and which is never compiled on its own).
+for d in "${extra_incdirs[@]}"; do
+  d="$(abs "$d")"
+  # A file names its own directory: Bazel hands over files, not directories.
+  [[ -f "$d" ]] && d="$(dirname "$d")"
+  incdirs+=("$d")
+done
 mapfile -t incdirs < <(printf '%s\n' "${incdirs[@]}" | sort -u)
 
 work="${TEST_TMPDIR:-$(mktemp -d)}/work"
@@ -108,7 +119,10 @@ case "$sim" in
     ;;
   iverilog)
     if [[ -z "$tool2" ]]; then echo "--tool2 <vvp> is needed" >&2; exit 2; fi
-    iargs=(-g2012 -s "$top" -o sim.vvp)
+    if [[ -z "$ivlbase" ]]; then echo "--ivl-base is needed" >&2; exit 2; fi
+    # -B: where the driver finds ivl, ivlpp and the code generators; in a
+    # Bazel build that is @iverilog//:ivl_base, not an install prefix.
+    iargs=(-B "$ivlbase" -g2012 -s "$top" -o sim.vvp)
     for d in "${defines[@]}"; do iargs+=("-D${d}"); done
     for i in "${incdirs[@]}"; do iargs+=("-I${i}"); done
     t0="$(now)"
@@ -116,7 +130,8 @@ case "$sim" in
     t1="$(now)"
     record compile "$(elapsed "$t0" "$t1")"
     t0="$(now)"
-    "$tool2" -n sim.vvp "${plusargs[@]}" | tee sim.log
+    # -M: where vvp finds system.vpi and the other VPI modules.
+    "$tool2" -M "$ivlbase" -n sim.vvp "${plusargs[@]}" | tee sim.log
     t1="$(now)"
     record run "$(elapsed "$t0" "$t1")"
     ;;

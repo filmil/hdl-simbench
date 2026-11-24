@@ -7,6 +7,8 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 exports_files(["rtlmeter_case.sh"])
 
 _EXAMPLE_ARGS = [
+    "--incdir",
+    "$(rootpath //third_party/rtlmeter:harness_include)",
     "--top",
     "top",
     "--clock",
@@ -36,6 +38,7 @@ sh_test(
     data = [
         "//third_party/rtlmeter:example_srcs",
         "//third_party/rtlmeter:harness",
+        "//third_party/rtlmeter:harness_include",
         "@verilator_prebuilt//:includes",
         "@verilator_prebuilt//:verilator",
     ],
@@ -54,11 +57,15 @@ sh_test(
         "$(rootpath @iverilog//:iverilog)",
         "--tool2",
         "$(rootpath @iverilog//:vvp)",
+        "--ivl-base",
+        "$(rootpath @iverilog//:ivl_base)",
     ] + _EXAMPLE_ARGS + ["--"] + _EXAMPLE_SRCS,
     data = [
         "//third_party/rtlmeter:example_srcs",
         "//third_party/rtlmeter:harness",
+        "//third_party/rtlmeter:harness_include",
         "@iverilog",
+        "@iverilog//:ivl_base",
         "@iverilog//:vvp",
     ],
 )

@@ -9,14 +9,20 @@ licenses(["notice"])
 
 exports_files(["LICENSE"])
 
-# The harness every design includes: it counts cycles of the main clock and
-# writes the count to _rtlmeter_cycles.txt at the end of the simulation.
+# The harness: a module that counts cycles of the main clock and writes the
+# count to _rtlmeter_cycles.txt at the end of the simulation. It is compiled
+# with every design.
 filegroup(
     name = "harness",
-    srcs = [
-        "rtl/__rtlmeter_top_include.vh",
-        "rtl/__rtlmeter_utils.sv",
-    ],
+    srcs = ["rtl/__rtlmeter_utils.sv"],
+)
+
+# The include file that instantiates the harness. Each design's top module
+# includes it, so its directory is an include directory; it is never
+# compiled on its own.
+filegroup(
+    name = "harness_include",
+    srcs = ["rtl/__rtlmeter_top_include.vh"],
 )
 
 # Example: a counter that prints a greeting every 200000 cycles and stops at
