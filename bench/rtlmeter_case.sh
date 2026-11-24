@@ -120,8 +120,13 @@ case "$sim" in
   iverilog)
     if [[ -z "$tool2" ]]; then echo "--tool2 <vvp> is needed" >&2; exit 2; fi
     if [[ -z "$ivlbase" ]]; then echo "--ivl-base is needed" >&2; exit 2; fi
-    # -B: where the driver finds ivl, ivlpp and the code generators; in a
-    # Bazel build that is @iverilog//:ivl_base, not an install prefix.
+    # The BCR build compiles in IVL_ROOT="ivl", a path relative to the
+    # working directory, and looks for it before it reads -B; without it
+    # the driver aborts in find_ivl_root. So ./ivl is the base directory
+    # (@iverilog//:ivl_base), named also by -B and by IVL_BASE, as the
+    # module's own smoke test does.
+    ln -sfn "$ivlbase" ivl
+    export IVL_BASE="$ivlbase"
     iargs=(-B "$ivlbase" -g2012 -s "$top" -o sim.vvp)
     for d in "${defines[@]}"; do iargs+=("-D${d}"); done
     for i in "${incdirs[@]}"; do iargs+=("-I${i}"); done
