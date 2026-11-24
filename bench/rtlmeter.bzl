@@ -34,6 +34,7 @@ _SIMULATORS = {
             "@platforms//os:linux",
         ],
         cpp = True,
+        smoke_size = "medium",
     ),
     "xezim": struct(
         args = ["--tool", "$(rootpath @xezim//:xezim)"],
@@ -46,6 +47,9 @@ _SIMULATORS = {
         ],
         # Compiles DPI-C sources itself, with the host compiler.
         cpp = True,
+        # VeeR-EL2's hiperf configuration takes xezim over 5 minutes in CI,
+        # compile and 5000 cycles: its smoke tests get the next size.
+        smoke_size = "large",
     ),
     "iverilog": struct(
         args = [
@@ -66,6 +70,7 @@ _SIMULATORS = {
         compatible = [],
         # No DPI-C: cases with C++ sources are not made for Icarus.
         cpp = False,
+        smoke_size = "medium",
     ),
 }
 
@@ -144,7 +149,7 @@ def rtlmeter_design(name, cases, simulators = None, ci_max_cycles = CI_MAX_CYCLE
                 if long:
                     sh_test(
                         name = "%s_%s_%s_smoke_test" % (config, test, sim),
-                        size = "medium",
+                        size = s.smoke_size,
                         srcs = ["//bench:rtlmeter_case.sh"],
                         args = [
                             "--smoke",
