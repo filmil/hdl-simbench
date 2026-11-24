@@ -33,6 +33,18 @@ _SIMULATORS = {
         ],
         cpp = True,
     ),
+    "xezim": struct(
+        args = ["--tool", "$(rootpath @xezim//:xezim)"],
+        data = ["@xezim//:xezim"],
+        # The original harness: xezim follows IEEE 1800, $root included.
+        harness = "//third_party/rtlmeter:harness",
+        compatible = [
+            "@platforms//cpu:x86_64",
+            "@platforms//os:linux",
+        ],
+        # Compiles DPI-C sources itself, with the host compiler.
+        cpp = True,
+    ),
     "iverilog": struct(
         args = [
             "--tool",
