@@ -1,0 +1,27 @@
+# RTLMeter (https://github.com/verilator/rtlmeter), Verilator's benchmark
+# suite for RTL simulators, Apache-2.0 (LICENSE here). Copied from commit
+# 867a84bdc4e78fece96b93677fbbb84c0ce6eb08: the shared harness (rtl/) and the
+# designs this bench uses, each with its descriptor.yaml unchanged.
+
+package(default_visibility = ["//visibility:public"])
+
+licenses(["notice"])
+
+exports_files(["LICENSE"])
+
+# The harness every design includes: it counts cycles of the main clock and
+# writes the count to _rtlmeter_cycles.txt at the end of the simulation.
+filegroup(
+    name = "harness",
+    srcs = [
+        "rtl/__rtlmeter_top_include.vh",
+        "rtl/__rtlmeter_utils.sv",
+    ],
+)
+
+# Example: a counter that prints a greeting every 200000 cycles and stops at
+# 1000000. Its "loud" configuration adds a DPI C++ function, not used here.
+filegroup(
+    name = "example_srcs",
+    srcs = ["designs/Example/src/top.v"],
+)
