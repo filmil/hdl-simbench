@@ -14,7 +14,8 @@ _EXAMPLE_ARGS = [
     "--cycles",
     "1000000",
     "--expect",
-    "1000000 - Hello World!",
+    # Quoted inside: Bazel splits test args on spaces, as a shell would.
+    "'1000000 - Hello World!'",
 ]
 
 _EXAMPLE_SRCS = [
