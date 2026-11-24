@@ -17,6 +17,9 @@ rtlmeter_design(
     cases = CASES,
     # A counter: a million cycles take seconds, so CI runs every case.
     ci_max_cycles = 1000000,
+    # top.v calls $finish on the clock edge the harness counts, so whether
+    # that edge is counted is the simulator's choice (rtlmeter_case.sh).
+    cycle_tolerance = 1,
 )
 
 # cases.bzl must be what //tools:rtlmeter_import writes from descriptor.yaml.

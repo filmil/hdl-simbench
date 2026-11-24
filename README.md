@@ -7,7 +7,7 @@ Work in progress; see https://github.com/filmil/hdl-simbench/issues/1.
 
 ## What is compared
 
-- SystemVerilog: Verilator, Icarus Verilog, xezim.
+- SystemVerilog: Verilator, Icarus Verilog, xezim (0.11.7, from filmil/bazel-registry).
 - VHDL: GHDL, NVC.
 
 Only open-source simulators are reported. Commercial simulator licenses

@@ -13,10 +13,10 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 CI_MAX_CYCLES = 100000
 
 # Each long case also gets a smoke test that CI runs: the same compile and
-# files, stopped after this many cycles by RTLMeter's own +max_cycles. As in
-# RTLMeter, a run stopped that way skips the cycle check and the post hook;
-# it must print the harness's "+max_cycles reached" line instead.
-SMOKE_CYCLES = 20000
+# files, stopped by RTLMeter's own +max_cycles after the simulator's
+# smoke_cycles (_SIMULATORS below). As in RTLMeter, a run stopped that way
+# skips the cycle check and the post hook; it must print the harness's
+# "+max_cycles reached" line instead.
 
 _SIMULATORS = {
     "verilator": struct(
@@ -32,6 +32,26 @@ _SIMULATORS = {
             "@platforms//os:linux",
         ],
         cpp = True,
+        test_size = "medium",
+        smoke_cycles = 20000,
+    ),
+    "xezim": struct(
+        args = ["--tool", "$(rootpath @xezim//:xezim)"],
+        data = ["@xezim//:xezim"],
+        # The original harness: xezim follows IEEE 1800, $root included.
+        harness = "//third_party/rtlmeter:harness",
+        compatible = [
+            "@platforms//cpu:x86_64",
+            "@platforms//os:linux",
+        ],
+        # Compiles DPI-C sources itself, with the host compiler.
+        cpp = True,
+        # xezim runs VeeR-EL2 at a few hundred cycles a second in CI: its
+        # hiperf hello took 171 s with the compile, and 5000 cycles over
+        # 5 minutes. Its tests get the next size (15 minutes), and its smoke
+        # tests fewer cycles.
+        test_size = "large",
+        smoke_cycles = 5000,
     ),
     "iverilog": struct(
         args = [
@@ -52,6 +72,8 @@ _SIMULATORS = {
         compatible = [],
         # No DPI-C: cases with C++ sources are not made for Icarus.
         cpp = False,
+        test_size = "medium",
+        smoke_cycles = 20000,
     ),
 }
 
@@ -59,7 +81,7 @@ def _quote(s):
     # Bazel splits test args as a Bourne shell would.
     return "'" + s.replace("'", "'\\''") + "'"
 
-def rtlmeter_design(name, cases, simulators = None, ci_max_cycles = CI_MAX_CYCLES, unsupported = {}):
+def rtlmeter_design(name, cases, simulators = None, ci_max_cycles = CI_MAX_CYCLES, unsupported = {}, cycle_tolerance = 0):
     """One sh_test per configuration, test and simulator.
 
     Args:
@@ -68,6 +90,9 @@ def rtlmeter_design(name, cases, simulators = None, ci_max_cycles = CI_MAX_CYCLE
       simulators: which simulators to make tests for; all by default.
       ci_max_cycles: cases longer than this are "manual" and "long"; a tiny
         design can afford more cycles in CI.
+      cycle_tolerance: 1 to also accept one cycle fewer than expected, for a
+        design that calls $finish on the main clock's edge (see
+        rtlmeter_case.sh); 0, an exact check, otherwise.
       unsupported: {simulator: (error text, reason)} for simulators that
         cannot run the design. No cases are made for them; instead one test,
         <simulator>_unsupported_test, checks that the first case still fails
@@ -85,6 +110,8 @@ def rtlmeter_design(name, cases, simulators = None, ci_max_cycles = CI_MAX_CYCLE
                 args = ["--sim", sim] + s.args + ["--top", c["top"]]
                 if t["expected_cycles"] != None:
                     args += ["--cycles", str(t["expected_cycles"])]
+                    if cycle_tolerance:
+                        args += ["--cycle-tolerance", str(cycle_tolerance)]
                 for k, v in c["defines"].items():
                     args += ["--define", _quote("%s=%s" % (k, v))]
                 for k, v in c["params"].items():
@@ -120,7 +147,7 @@ def rtlmeter_design(name, cases, simulators = None, ci_max_cycles = CI_MAX_CYCLE
                     continue
                 sh_test(
                     name = "%s_%s_%s_test" % (config, test, sim),
-                    size = "enormous" if long else "medium",
+                    size = "enormous" if long else s.test_size,
                     srcs = ["//bench:rtlmeter_case.sh"],
                     args = args,
                     data = data,
@@ -130,12 +157,12 @@ def rtlmeter_design(name, cases, simulators = None, ci_max_cycles = CI_MAX_CYCLE
                 if long:
                     sh_test(
                         name = "%s_%s_%s_smoke_test" % (config, test, sim),
-                        size = "medium",
+                        size = s.test_size,
                         srcs = ["//bench:rtlmeter_case.sh"],
                         args = [
                             "--smoke",
                             "--plusarg",
-                            "+max_cycles=%d" % SMOKE_CYCLES,
+                            "+max_cycles=%d" % s.smoke_cycles,
                             "--expect",
                             _quote("RTLMeter: +max_cycles reached, exiting"),
                         ] + args,

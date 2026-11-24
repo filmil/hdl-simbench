@@ -18,7 +18,7 @@
 # "step seconds" pair per line is appended to it.
 #
 # Usage:
-#   rtlmeter_case.sh --sim verilator|iverilog --tool <binary>
+#   rtlmeter_case.sh --sim verilator|iverilog|xezim --tool <binary>
 #       [--tool2 <vvp>] [--ivl-base <dir>] [--verilator-root <dir>]
 #       --top <module> [--cycles <expected>]
 #       [--define NAME=VALUE]... [--param NAME=VALUE]...
@@ -27,12 +27,13 @@
 #       [--cpp-src <file>]... (DPI-C sources; Verilator only)
 #       [--smoke]   (a run cut short by +max_cycles: as in RTLMeter, no
 #                    cycle check and no post hook)
+#       [--cycle-tolerance 1] (also pass with one cycle fewer; see below)
 #       [--timing <file>]
 #       -- <source files>...
 
 set -euo pipefail
 
-sim="" tool="" tool2="" vroot="" ivlbase="" top="" cycles="" timing="" posthook="" smoke=""
+sim="" tool="" tool2="" vroot="" ivlbase="" top="" cycles="" timing="" posthook="" smoke="" tolerance=0
 defines=() params=() vargs=() plusargs=() expects=() includes=() files=() cpps=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -53,6 +54,7 @@ while [[ $# -gt 0 ]]; do
     --post-hook) posthook="$2"; shift 2 ;;
     --cpp-src) cpps+=("$2"); shift 2 ;;
     --smoke) smoke=1; shift ;;
+    --cycle-tolerance) tolerance="$2"; shift 2 ;;
     --timing) timing="$2"; shift 2 ;;
     --) shift; break ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -152,6 +154,27 @@ case "$sim" in
     # -M: where vvp finds system.vpi and the other VPI modules.
     run=("$tool2" -M "$ivlbase" -n "$work/sim.vvp")
     ;;
+  xezim)
+    # Compile and run are separate steps, so that they are timed apart:
+    # --compile writes the elaborated design, which a second call runs.
+    # --no-cache: xezim otherwise caches elaborated designs in ~/.cache,
+    # and a cached compile would not be timed honestly. Strict IEEE 1800
+    # (no --relax-* switch), as the other simulators get no allowances.
+    a=(--no-cache --compile -o "$work/design.xzc" -s "$top" "+incdir+$incdir")
+    for d in "${defines[@]}"; do a+=("+define+${d}"); done
+    # Verilator's -G<name>=<value> sets a parameter of the top module;
+    # -g/<top>/<name>=<value> is xezim's form limited to that module.
+    for p in "${params[@]}"; do a+=("-g/${top}/${p}"); done
+    t0="$(now)"
+    "$tool" "${a[@]}" "${sources[@]}"
+    t1="$(now)"
+    record compile "$(elapsed "$t0" "$t1")"
+    # DPI C/C++ sources are not part of the compiled design: xezim takes
+    # them when the design runs, and compiles them then with the host
+    # compiler. So for xezim, a DPI-C build is timed in the run step, not in
+    # compile (only RTLMeter's Example "loud" configuration has DPI-C).
+    run=("$tool" --no-cache "$work/design.xzc" "${cppfiles[@]}")
+    ;;
   *)
     echo "unknown simulator: $sim" >&2
     exit 2
@@ -180,7 +203,19 @@ if [[ -n "$posthook" ]]; then
 fi
 if [[ -n "$cycles" ]]; then
   got="$(cat _rtlmeter_cycles.txt 2>/dev/null || echo missing)"
-  if [[ "$got" != "$cycles" ]]; then
+  # --cycle-tolerance 1: one cycle fewer also passes, for a design that
+  # calls $finish from a process on the main clock's edge. That process
+  # races the harness's cycle counter on the same edge, and IEEE 1800
+  # (4.7, nondeterminism) lets either run first, so whether the last edge
+  # is counted is the simulator's choice. Verilator and Icarus count it;
+  # xezim finishes first (RTLMeter's Example: 999999 of 1000000). A design
+  # opts in (rtlmeter_design's cycle_tolerance); every simulator then gets
+  # the same allowance. The others are checked exactly.
+  if ! [[ "$cycles" =~ ^[0-9]+$ && "$tolerance" =~ ^[01]$ ]]; then
+    echo "bad --cycles ($cycles) or --cycle-tolerance ($tolerance)" >&2
+    exit 2
+  fi
+  if ! [[ "$got" =~ ^[0-9]+$ ]] || (( got > cycles || got < cycles - tolerance )); then
     echo "FAIL: $sim ran $got cycles, expected $cycles" >&2
     exit 1
   fi

@@ -23,6 +23,10 @@ verilator_binary = use_extension(
 )
 use_repo(verilator_binary, "verilator_prebuilt")
 
+# xezim, a SystemVerilog simulator in Rust, built from source by its module in
+# filmil/bazel-registry (Rust, opt build). Linux x86-64 only.
+bazel_dep(name = "xezim", version = "0.11.7")
+
 # Icarus Verilog, built from source by its BCR module.
 bazel_dep(name = "iverilog", version = "13.0.bcr.1")
 
