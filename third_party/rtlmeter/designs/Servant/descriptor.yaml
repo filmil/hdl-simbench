@@ -1,0 +1,94 @@
+origin:
+  - repository: https://github.com/olofk/serv.git
+    revision: 7d9cde4e6ca4f4c84d7512a752a4c187537dd373
+    licenses:
+      - LICENSE
+
+compile:
+  verilogSourceFiles:
+    - bench/uart_decoder.v
+    - bench/servant_tb.v
+    - bench/servant_sim.v
+    - servant/servant_mux.v
+    - servant/servant_ram.v
+    - servant/servant_gpio.v
+    - servant/servant_timer.v
+    - servant/servant.v
+    - rtl/serv_debug.v
+    - rtl/serv_rf_ram.v
+    - rtl/serv_rf_top.v
+    - rtl/serv_immdec.v
+    - rtl/serv_aligner.v
+    - rtl/serv_ctrl.v
+    - rtl/serv_bufreg2.v
+    - rtl/serv_decode.v
+    - rtl/serv_rf_if.v
+    - rtl/serv_alu.v
+    - rtl/serv_bufreg.v
+    - rtl/serv_state.v
+    - rtl/serv_mem_if.v
+    - rtl/serv_rf_ram_if.v
+    - rtl/serv_csr.v
+    - rtl/serv_top.v
+    - rtl/serv_compdec.v
+    - servile/servile_rf_mem_if.v
+    - servile/servile_mux.v
+    - servile/servile_arbiter.v
+    - servile/servile.v
+  topModule: servant_tb
+  mainClock: servant_tb.wb_clk
+
+execute:
+  common:
+    postHook: tests/post.bash
+  tests:
+    hello:
+      files:
+        - tests/hello/program.hex
+    cmark:
+      files:
+        - tests/cmark/program.hex
+    dhry:
+      files:
+        - tests/dhry/program.hex
+    phil:
+      files:
+        - tests/phil/program.hex
+
+configurations:
+  serv:
+    execute:
+      tests:
+        hello:
+          expectedCycles: 53738
+        cmark:
+          args:
+            - "+iterations=2"
+          expectedCycles: 104636599
+        dhry:
+          args:
+            - "+iterations=2500"
+          expectedCycles: 115529887
+        phil:
+          args:
+            - "+iterations=20"
+          expectedCycles: 122144087
+  qerv:
+    compile:
+      verilatorArgs: [-Gwidth=4]
+    execute:
+      tests:
+        hello:
+          expectedCycles: 16560
+        cmark:
+          args:
+            - "+iterations=7"
+          expectedCycles: 107456741
+        dhry:
+          args:
+            - "+iterations=8000"
+          expectedCycles: 108534965
+        phil:
+          args:
+            - "+iterations=30"
+          expectedCycles: 119962620

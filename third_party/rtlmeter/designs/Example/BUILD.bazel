@@ -1,0 +1,37 @@
+# RTLMeter's Example design (a counter that prints a greeting every 200000
+# cycles and stops at 1000000), copied unchanged. The tests come from
+# cases.bzl, which //tools:rtlmeter_import writes from descriptor.yaml.
+
+load("@rules_python//python:py_test.bzl", "py_test")
+load("//bench:rtlmeter.bzl", "rtlmeter_design")
+load(":cases.bzl", "CASES")
+
+package(default_visibility = ["//visibility:public"])
+
+licenses(["notice"])
+
+exports_files(glob(["src/**"]))
+
+rtlmeter_design(
+    name = "Example",
+    cases = CASES,
+    # A counter: a million cycles take seconds, so CI runs every case.
+    ci_max_cycles = 1000000,
+)
+
+# cases.bzl must be what //tools:rtlmeter_import writes from descriptor.yaml.
+py_test(
+    name = "cases_test",
+    size = "small",
+    srcs = ["//tools:rtlmeter_import.py"],
+    args = [
+        "--check",
+        "third_party/rtlmeter/designs/Example",
+    ],
+    data = [
+        "cases.bzl",
+        "descriptor.yaml",
+    ],
+    main = "//tools:rtlmeter_import.py",
+    deps = ["@pypi//pyyaml"],
+)

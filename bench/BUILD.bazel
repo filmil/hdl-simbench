@@ -1,8 +1,9 @@
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 # Correctness first: each simulator must run each case to the cycle count
-# RTLMeter expects, with the expected output, before any of its timings
-# count. These tests are that check. Timed runs use the same script.
+# RTLMeter expects, before any of its timings count. The cases' tests are
+# made by rtlmeter_design() (rtlmeter.bzl) in each design's package, from
+# rtlmeter_case.sh; timed runs use the same script.
 
 exports_files(["rtlmeter_case.sh"])
 
@@ -15,84 +16,12 @@ genrule(
     srcs = ["//third_party/rtlmeter:harness"],
     outs = ["noroot/__rtlmeter_utils.sv"],
     cmd = "sed -e 's/\\$$root\\.//g' $< > $@ && ! grep -q '\\$$root' $@",
+    visibility = ["//visibility:public"],
 )
 
-_EXAMPLE_ARGS = [
-    "--incdir",
-    "$(rootpath //third_party/rtlmeter:harness_include)",
-    "--top",
-    "top",
-    "--clock",
-    "top.clk",
-    "--cycles",
-    "1000000",
-    "--expect",
-    # Quoted inside: Bazel splits test args on spaces, as a shell would.
-    "'1000000 - Hello World!'",
-]
-
-_EXAMPLE_SRCS = [
-    "$(rootpaths //third_party/rtlmeter:harness)",
-    "$(rootpaths //third_party/rtlmeter:example_srcs)",
-]
-
-sh_test(
-    name = "example_verilator_test",
-    size = "medium",
-    srcs = ["rtlmeter_case.sh"],
-    args = [
-        "--sim",
-        "verilator",
-        "--tool",
-        "$(rootpath @verilator_prebuilt//:verilator)",
-    ] + _EXAMPLE_ARGS + ["--"] + _EXAMPLE_SRCS,
-    data = [
-        "//third_party/rtlmeter:example_srcs",
-        "//third_party/rtlmeter:harness",
-        "//third_party/rtlmeter:harness_include",
-        "@verilator_prebuilt//:includes",
-        "@verilator_prebuilt//:verilator",
-    ],
-    # Compiles C++ with the host compiler.
-    tags = ["requires-cc"],
-    # The prebuilt Verilator is a Linux x86-64 binary.
-    target_compatible_with = [
-        "@platforms//cpu:x86_64",
-        "@platforms//os:linux",
-    ],
-)
-
-sh_test(
-    name = "example_iverilog_test",
-    size = "medium",
-    srcs = ["rtlmeter_case.sh"],
-    args = [
-        "--sim",
-        "iverilog",
-        "--tool",
-        "$(rootpath @iverilog//:iverilog)",
-        "--tool2",
-        "$(rootpath @iverilog//:vvp)",
-        "--ivl-base",
-        "$(rootpath @iverilog//:ivl_base)",
-    ] + _EXAMPLE_ARGS + ["--"] + [
-        # The harness without $root (see harness_noroot above).
-        "$(rootpath :harness_noroot)",
-        "$(rootpaths //third_party/rtlmeter:example_srcs)",
-    ],
-    data = [
-        ":harness_noroot",
-        "//third_party/rtlmeter:example_srcs",
-        "//third_party/rtlmeter:harness_include",
-        "@iverilog",
-        "@iverilog//:ivl_base",
-        "@iverilog//:vvp",
-    ],
-)
-
-# The check must fail when a case is wrong: here the same Example run under
-# Icarus, once with the wrong expected cycle count and once with an expected
-# line the design never prints. Each must make rtlmeter_case.sh exit 1.
+# The check must fail when a case is wrong: RTLMeter's Example under Icarus,
+# once with the wrong expected cycle count and once with an expected line
+# the design never prints. Each must make rtlmeter_case.sh exit 1.
 sh_test(
     name = "check_fails_test",
     size = "medium",
@@ -107,21 +36,21 @@ sh_test(
         "$(rootpath @iverilog//:vvp)",
         "--ivl-base",
         "$(rootpath @iverilog//:ivl_base)",
-        "--incdir",
-        "$(rootpath //third_party/rtlmeter:harness_include)",
         "--top",
         "top",
-        "--clock",
-        "top.clk",
+        "--define",
+        "__RTLMETER_MAIN_CLOCK=top.clk",
+        "--include",
+        "$(rootpath //third_party/rtlmeter:harness_include)",
         "--",
+        "$(rootpath //third_party/rtlmeter/designs/Example:src/top.v)",
         "$(rootpath :harness_noroot)",
-        "$(rootpaths //third_party/rtlmeter:example_srcs)",
     ],
     data = [
         ":harness_noroot",
         ":rtlmeter_case.sh",
-        "//third_party/rtlmeter:example_srcs",
         "//third_party/rtlmeter:harness_include",
+        "//third_party/rtlmeter/designs/Example:src/top.v",
         "@iverilog",
         "@iverilog//:ivl_base",
         "@iverilog//:vvp",

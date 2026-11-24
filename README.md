@@ -17,7 +17,13 @@ commonly forbid publishing benchmark results; Vivado's, for one, does
 ## Designs
 
 - SystemVerilog: the cases of [RTLMeter](https://github.com/verilator/rtlmeter),
-  Verilator's benchmark suite, in `third_party/rtlmeter` (Apache-2.0).
+  Verilator's benchmark suite, in `third_party/rtlmeter` (Apache-2.0). So far:
+  Example, Servant (SERV, a bit-serial RISC-V core) and VeeR-EL2.
+- Each design's `descriptor.yaml` is turned into `cases.bzl` by
+  `bazel run //tools:rtlmeter_import -- third_party/rtlmeter/designs/<design>`,
+  resolved exactly as RTLMeter resolves it; one test per configuration, test
+  and simulator follows. Cases over 100000 cycles are tagged `manual` and
+  `long`: they are for the timed runs, not for CI.
 - VHDL: NEORV32 running CoreMark (to come).
 
 ## How a case is checked

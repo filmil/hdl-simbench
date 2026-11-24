@@ -1,0 +1,33 @@
+# RTLMeter's VeeR-EL2 design, copied unchanged with its license (see descriptor.yaml
+# for its origin). The tests come from cases.bzl, which
+# //tools:rtlmeter_import writes from descriptor.yaml.
+
+load("//bench:rtlmeter.bzl", "rtlmeter_design")
+load("@rules_python//python:py_test.bzl", "py_test")
+load(":cases.bzl", "CASES")
+
+package(default_visibility = ["//visibility:public"])
+
+licenses(["notice"])
+
+rtlmeter_design(
+    name = "VeeR-EL2",
+    cases = CASES,
+)
+
+# cases.bzl must be what //tools:rtlmeter_import writes from descriptor.yaml.
+py_test(
+    name = "cases_test",
+    size = "small",
+    srcs = ["//tools:rtlmeter_import.py"],
+    args = [
+        "--check",
+        "third_party/rtlmeter/designs/VeeR-EL2",
+    ],
+    data = [
+        "cases.bzl",
+        "descriptor.yaml",
+    ],
+    main = "//tools:rtlmeter_import.py",
+    deps = ["@pypi//pyyaml"],
+)

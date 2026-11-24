@@ -24,10 +24,3 @@ filegroup(
     name = "harness_include",
     srcs = ["rtl/__rtlmeter_top_include.vh"],
 )
-
-# Example: a counter that prints a greeting every 200000 cycles and stops at
-# 1000000. Its "loud" configuration adds a DPI C++ function, not used here.
-filegroup(
-    name = "example_srcs",
-    srcs = ["designs/Example/src/top.v"],
-)
