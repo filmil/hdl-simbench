@@ -1,0 +1,32 @@
+load("@rules_python//python:py_binary.bzl", "py_binary")
+load("@rules_python//python:py_library.bzl", "py_library")
+load("@rules_python//python:py_test.bzl", "py_test")
+
+exports_files([
+    "requirements_lock.txt",
+    "rtlmeter_import.py",
+])
+
+# Writes third_party/rtlmeter/designs/<design>/cases.bzl from the design's
+# descriptor.yaml:
+#   bazel run //tools:rtlmeter_import -- third_party/rtlmeter/designs/Servant
+py_library(
+    name = "rtlmeter_import_lib",
+    srcs = ["rtlmeter_import.py"],
+    imports = ["."],
+    deps = ["@pypi//pyyaml"],
+)
+
+py_binary(
+    name = "rtlmeter_import",
+    srcs = ["rtlmeter_import.py"],
+    visibility = ["//visibility:public"],
+    deps = ["@pypi//pyyaml"],
+)
+
+py_test(
+    name = "rtlmeter_import_test",
+    size = "small",
+    srcs = ["rtlmeter_import_test.py"],
+    deps = [":rtlmeter_import_lib"],
+)
