@@ -13,9 +13,9 @@ bazel_dep(name = "rules_shell", version = "0.8.0")
 
 # Verilator, from a prebuilt binary (filmil/bazel_toolchains_verilator), so
 # that no build compiles Verilator itself. The bench calls the binary
-# directly; it does not use rules_verilator's rules.
+# directly; it does not use rules_verilator's rules. The binary exists for
+# Linux x86-64 only.
 bazel_dep(name = "bazel_toolchains_verilator", version = "0.1.0")
-bazel_dep(name = "rules_verilator", version = "1.1.2")
 
 verilator_binary = use_extension(
     "@bazel_toolchains_verilator//verilator:extension.bzl",

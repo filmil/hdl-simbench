@@ -55,6 +55,11 @@ sh_test(
     ],
     # Compiles C++ with the host compiler.
     tags = ["requires-cc"],
+    # The prebuilt Verilator is a Linux x86-64 binary.
+    target_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
 )
 
 sh_test(
@@ -77,6 +82,44 @@ sh_test(
     ],
     data = [
         ":harness_noroot",
+        "//third_party/rtlmeter:example_srcs",
+        "//third_party/rtlmeter:harness_include",
+        "@iverilog",
+        "@iverilog//:ivl_base",
+        "@iverilog//:vvp",
+    ],
+)
+
+# The check must fail when a case is wrong: here the same Example run under
+# Icarus, once with the wrong expected cycle count and once with an expected
+# line the design never prints. Each must make rtlmeter_case.sh exit 1.
+sh_test(
+    name = "check_fails_test",
+    size = "medium",
+    srcs = ["expect_failure.sh"],
+    args = [
+        "$(rootpath :rtlmeter_case.sh)",
+        "--sim",
+        "iverilog",
+        "--tool",
+        "$(rootpath @iverilog//:iverilog)",
+        "--tool2",
+        "$(rootpath @iverilog//:vvp)",
+        "--ivl-base",
+        "$(rootpath @iverilog//:ivl_base)",
+        "--incdir",
+        "$(rootpath //third_party/rtlmeter:harness_include)",
+        "--top",
+        "top",
+        "--clock",
+        "top.clk",
+        "--",
+        "$(rootpath :harness_noroot)",
+        "$(rootpaths //third_party/rtlmeter:example_srcs)",
+    ],
+    data = [
+        ":harness_noroot",
+        ":rtlmeter_case.sh",
         "//third_party/rtlmeter:example_srcs",
         "//third_party/rtlmeter:harness_include",
         "@iverilog",
