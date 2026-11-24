@@ -6,6 +6,17 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 exports_files(["rtlmeter_case.sh"])
 
+# RTLMeter's harness names the main clock as $root.<clock>. Icarus Verilog
+# does not support $root, so it gets this copy, made from the unchanged
+# third-party file with only "$root." removed. The harness is instantiated
+# inside the top module, so "<top>.<clock>" names the same signal there.
+genrule(
+    name = "harness_noroot",
+    srcs = ["//third_party/rtlmeter:harness"],
+    outs = ["noroot/__rtlmeter_utils.sv"],
+    cmd = "sed -e 's/\\$$root\\.//g' $< > $@ && ! grep -q '\\$$root' $@",
+)
+
 _EXAMPLE_ARGS = [
     "--incdir",
     "$(rootpath //third_party/rtlmeter:harness_include)",
@@ -59,10 +70,14 @@ sh_test(
         "$(rootpath @iverilog//:vvp)",
         "--ivl-base",
         "$(rootpath @iverilog//:ivl_base)",
-    ] + _EXAMPLE_ARGS + ["--"] + _EXAMPLE_SRCS,
+    ] + _EXAMPLE_ARGS + ["--"] + [
+        # The harness without $root (see harness_noroot above).
+        "$(rootpath :harness_noroot)",
+        "$(rootpaths //third_party/rtlmeter:example_srcs)",
+    ],
     data = [
+        ":harness_noroot",
         "//third_party/rtlmeter:example_srcs",
-        "//third_party/rtlmeter:harness",
         "//third_party/rtlmeter:harness_include",
         "@iverilog",
         "@iverilog//:ivl_base",
