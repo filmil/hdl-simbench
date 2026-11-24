@@ -1,3 +1,4 @@
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 # Correctness first: each simulator must run each case to the cycle count
@@ -58,4 +59,11 @@ sh_test(
         "@iverilog//:ivl_base",
         "@iverilog//:vvp",
     ],
+)
+
+# The driver of the timed runs (see its header). Build it, then run
+# bazel-bin/bench/timed_runs from the workspace directory.
+sh_binary(
+    name = "timed_runs",
+    srcs = ["timed_runs.sh"],
 )

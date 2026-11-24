@@ -18,15 +18,42 @@ CI_MAX_CYCLES = 100000
 # skips the cycle check and the post hook; it must print the harness's
 # "+max_cycles reached" line instead.
 
+# The hermetic C++ compiler (MODULE.bazel: LLVM with a Debian sysroot), for
+# what the simulators compile while a case runs: Verilator's model, and
+# DPI-C sources. The same compiler on every machine, eph2 included, which
+# has none of its own.
+_CXX_ARGS = [
+    "--clangxx",
+    "$(rootpath @llvm_toolchain_llvm//:bin/clang++)",
+    "--sysroot-file",
+    "$(rootpath @sysroot_linux_x86_64//:usr/include/stdio.h)",
+]
+
+_CXX_DATA = [
+    "@llvm_toolchain_llvm//:bin/clang++",
+    "@llvm_toolchain_llvm//:clang",
+    "@llvm_toolchain_llvm//:include",
+    "@llvm_toolchain_llvm//:ld",
+    "@llvm_toolchain_llvm//:lib",
+    "@sysroot_linux_x86_64//:sysroot",
+    "@sysroot_linux_x86_64//:usr/include/stdio.h",
+]
+
 _SIMULATORS = {
     "verilator": struct(
-        args = ["--tool", "$(rootpath @verilator_prebuilt//:verilator)"],
+        args = [
+            "--tool",
+            "$(rootpath @verilator//:verilator)",
+            "--verilator-root-file",
+            "$(rootpath @verilator//:include/verilated_std.sv)",
+        ] + _CXX_ARGS,
         data = [
-            "@verilator_prebuilt//:includes",
-            "@verilator_prebuilt//:verilator",
-        ],
+            "@verilator//:include/verilated_std.sv",
+            "@verilator//:verilator",
+            "@verilator//:verilator_includes",
+        ] + _CXX_DATA,
         harness = "//third_party/rtlmeter:harness",
-        # The prebuilt Verilator is a Linux x86-64 binary.
+        # The hermetic toolchain's sysroot is Linux x86-64.
         compatible = [
             "@platforms//cpu:x86_64",
             "@platforms//os:linux",
@@ -36,8 +63,8 @@ _SIMULATORS = {
         smoke_cycles = 20000,
     ),
     "xezim": struct(
-        args = ["--tool", "$(rootpath @xezim//:xezim)"],
-        data = ["@xezim//:xezim"],
+        args = ["--tool", "$(rootpath @xezim//:xezim)"] + _CXX_ARGS,
+        data = ["@xezim//:xezim"] + _CXX_DATA,
         # The original harness: xezim follows IEEE 1800, $root included.
         harness = "//third_party/rtlmeter:harness",
         compatible = [

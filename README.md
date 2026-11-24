@@ -7,8 +7,15 @@ Work in progress; see https://github.com/filmil/hdl-simbench/issues/1.
 
 ## What is compared
 
-- SystemVerilog: Verilator, Icarus Verilog, xezim (0.11.7.bcr.1, from filmil/bazel-registry: Rust, with its C code and final link done by a pinned clang 23.1.5 and a Debian bullseye sysroot).
+- SystemVerilog: Verilator (5.046, built from source by its BCR module),
+  Icarus Verilog (13.0), xezim (0.11.7.bcr.1, from filmil/bazel-registry).
 - VHDL: GHDL, NVC.
+
+All C and C++ is compiled by one hermetic toolchain: clang 23.1.5 with
+Chromium's Debian bullseye sysroot (glibc 2.31), registered for the whole
+build. That covers the simulators themselves (xezim's C code and link
+included), the C++ model Verilator writes for each case, and DPI-C sources.
+The bench needs no compiler on the machine it runs on.
 
 Only open-source simulators are reported. Commercial simulator licenses
 commonly forbid publishing benchmark results; Vivado's, for one, does
@@ -34,7 +41,22 @@ a case when that count equals the case's expected cycles and its output has
 the expected lines. Only passing runs are timed.
 
 ```
-bazel test //bench/...
+bazel test //...
+```
+
+## Timed runs
+
+`//bench:timed_runs` runs chosen case tests one at a time, pinned to one
+core, and appends a CSV row per run: wall, user and system time and peak
+memory of each step (Verilator's translation, the compile, the run), the
+cycles simulated and cycles per second, and the machine's state around the
+run (load average before, during and after; how busy the pinned core, its
+hyperthread sibling and the other cores were; CPU steal).
+
+```
+bazel build //bench:timed_runs
+bazel-bin/bench/timed_runs --core 2 --repeats 5 --out results.csv \
+    //third_party/rtlmeter/designs/Example:kind_hello_verilator_test
 ```
 
 ## License

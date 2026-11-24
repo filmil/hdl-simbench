@@ -24,7 +24,10 @@
 #       [--define NAME=VALUE]... [--param NAME=VALUE]...
 #       [--verilator-arg ARG]... [--plusarg +x=y]... [--expect <text>]...
 #       [--include <file>]... [--file <file>]... [--post-hook <script>]
-#       [--cpp-src <file>]... (DPI-C sources; Verilator only)
+#       [--cpp-src <file>]... (DPI-C sources)
+#       [--clangxx <clang++> --sysroot-file <sysroot>/usr/include/stdio.h]
+#                   (the compiler for Verilator's model and DPI-C; without
+#                    it, the host's c++)
 #       [--smoke]   (a run cut short by +max_cycles: as in RTLMeter, no
 #                    cycle check and no post hook)
 #       [--cycle-tolerance 1] (also pass with one cycle fewer; see below)
@@ -34,6 +37,7 @@
 set -euo pipefail
 
 sim="" tool="" tool2="" vroot="" ivlbase="" top="" cycles="" timing="" posthook="" smoke="" tolerance=0
+clangxx="" sysrootfile=""
 defines=() params=() vargs=() plusargs=() expects=() includes=() files=() cpps=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -41,6 +45,7 @@ while [[ $# -gt 0 ]]; do
     --tool) tool="$2"; shift 2 ;;
     --tool2) tool2="$2"; shift 2 ;;
     --verilator-root) vroot="$2"; shift 2 ;;
+    --verilator-root-file) vroot="$(dirname "$(dirname "$2")")"; shift 2 ;;
     --ivl-base) ivlbase="$2"; shift 2 ;;
     --top) top="$2"; shift 2 ;;
     --cycles) cycles="$2"; shift 2 ;;
@@ -55,6 +60,8 @@ while [[ $# -gt 0 ]]; do
     --cpp-src) cpps+=("$2"); shift 2 ;;
     --smoke) smoke=1; shift ;;
     --cycle-tolerance) tolerance="$2"; shift 2 ;;
+    --clangxx) clangxx="$2"; shift 2 ;;
+    --sysroot-file) sysrootfile="$2"; shift 2 ;;
     --timing) timing="$2"; shift 2 ;;
     --) shift; break ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -75,6 +82,8 @@ tool="$(abs "$tool")"
 [[ -n "$posthook" ]] && posthook="$(abs "$posthook")"
 cppfiles=()
 for c in "${cpps[@]}"; do cppfiles+=("$(abs "$c")"); done
+[[ -n "$clangxx" ]] && clangxx="$(abs "$clangxx")"
+[[ -n "$sysrootfile" ]] && sysrootfile="$(abs "$sysrootfile")"
 
 work="${TEST_TMPDIR:-$(mktemp -d)}/work"
 rm -rf "$work"
@@ -99,36 +108,78 @@ sources=()
 for s in "${srcs[@]}"; do sources+=("$work/verilogSourceFiles/$(basename "$s")"); done
 incdir="$work/verilogIncludeFiles"
 
+# Timing. Each step appends one line to the timing file:
+#   <step> <wall s> <user s> <system s> <max RSS KiB>
+# measured by /usr/bin/time, or "<step> <wall s>" alone without it. The file
+# is --timing, else $SIMBENCH_TIMING. The last line is "cycles <n>".
+# Under "bazel test", the default is timing.txt among the test's undeclared
+# outputs (bazel-testlogs/<test>/test.outputs/), which //bench:timed_runs reads.
+[[ -z "$timing" && -n "${SIMBENCH_TIMING:-}" ]] && timing="$(abs "$SIMBENCH_TIMING")"
+[[ -z "$timing" && -n "${TEST_UNDECLARED_OUTPUTS_DIR:-}" ]] && timing="$TEST_UNDECLARED_OUTPUTS_DIR/timing.txt"
+[[ -n "$timing" ]] && : > "$timing"
 now() { date +%s.%N; }
-record() { [[ -n "$timing" ]] && printf '%s %s\n' "$1" "$2" >> "$timing"; return 0; }
-elapsed() { awk -v a="$1" -v b="$2" 'BEGIN { printf "%.3f", b - a }'; }
+measure() {
+  local step="$1"; shift
+  if [[ -z "$timing" ]]; then
+    "$@"
+  elif [[ -x /usr/bin/time ]]; then
+    /usr/bin/time -f "$step %e %U %S %M" -a -o "$timing" "$@"
+  else
+    local t0 t1 st=0
+    t0="$(now)"
+    "$@" || st=$?
+    t1="$(now)"
+    awk -v s="$step" -v a="$t0" -v b="$t1" 'BEGIN { printf "%s %.3f\n", s, b - a }' >> "$timing"
+    return $st
+  fi
+}
+
+# The C++ compiler: the hermetic clang with its sysroot when given, as small
+# wrappers that Verilator's build and xezim's DPI-C build both call (CXX, CC).
+# libc++ is linked statically, so a built model needs no C++ library from the
+# machine it runs on. Without --clangxx, the host's c++.
+cxxflags=(-std=c++20 -O2)
+cxxlibs=(-pthread)
+if [[ -n "$clangxx" ]]; then
+  if [[ -z "$sysrootfile" ]]; then echo "--clangxx needs --sysroot-file" >&2; exit 2; fi
+  # <sysroot>/usr/include/stdio.h
+  sysroot="$(dirname "$(dirname "$(dirname "$sysrootfile")")")"
+  clang="$(dirname "$clangxx")/clang"
+  printf '#!/bin/sh\nexec "%s" --sysroot="%s" -stdlib=libc++ -fuse-ld=lld -static-libstdc++ "$@"\n' \
+    "$clangxx" "$sysroot" > "$work/cxx"
+  printf '#!/bin/sh\nexec "%s" --sysroot="%s" -fuse-ld=lld "$@"\n' "$clang" "$sysroot" > "$work/cc"
+  chmod +x "$work/cxx" "$work/cc"
+  export CXX="$work/cxx" CC="$work/cc"
+else
+  # GCC needs these; clang turns coroutines on with -std=c++20 and inlines
+  # x86-64 atomics.
+  cxxflags+=(-fcoroutines)
+  cxxlibs+=(-lpthread -latomic)
+fi
 
 cd "$work"
 case "$sim" in
   verilator)
-    # @verilator_prebuilt puts the binary at the repository root, beside
-    # its include/ tree, so that root is the default VERILATOR_ROOT.
+    # VERILATOR_ROOT is the directory holding include/ (--verilator-root-file
+    # names include/verilated_std.sv in it), else the binary's directory.
     if [[ -z "$vroot" ]]; then vroot="$(dirname "$tool")"; fi
-    # The prebuilt Verilator has no verilated.mk, so it cannot build its
-    # own model with --binary. It writes the C++ to obj/, and the C++ is
-    # compiled below with the host compiler at -O2, the optimization level
+    # Verilator's own --binary build needs verilated.mk and make; the C++
+    # it writes to obj/ is instead
+    # compiled below with $CXX (the hermetic clang above) at -O2, the level
     # Verilator's own build uses by default (OPT_FAST). The options are
     # RTLMeter's (src/rtlmeter/verilator.py), less --quiet-stats.
     a=(--cc --main --timing -Wno-fatal --top-module "$top" "+incdir+$incdir" --Mdir obj -o sim)
     for d in "${defines[@]}"; do a+=("+define+${d}"); done
     for p in "${params[@]}"; do a+=("-G${p}"); done
     a+=("${vargs[@]}")
-    t0="$(now)"
-    VERILATOR_ROOT="$vroot" "$tool" "${a[@]}" "${sources[@]}"
+    measure verilate env VERILATOR_ROOT="$vroot" "$tool" "${a[@]}" "${sources[@]}"
     inc="$vroot/include"
-    "${CXX:-c++}" -std=c++20 -O2 -fcoroutines -DVM_TRACE=0 \
+    measure compile "${CXX:-c++}" "${cxxflags[@]}" -DVM_TRACE=0 \
       -I obj -I "$inc" -I "$inc/vltstd" \
       obj/*.cpp "${cppfiles[@]}" \
       "$inc/verilated.cpp" "$inc/verilated_threads.cpp" \
       "$inc/verilated_timing.cpp" "$inc/verilated_random.cpp" \
-      -o obj/sim -pthread -lpthread -latomic
-    t1="$(now)"
-    record compile "$(elapsed "$t0" "$t1")"
+      -o obj/sim "${cxxlibs[@]}"
     run=("$work/obj/sim")
     ;;
   iverilog)
@@ -147,10 +198,7 @@ case "$sim" in
     for d in "${defines[@]}"; do a+=("-D${d}"); done
     # Parameter overrides of the top module: Verilator's -G<name>=<value>.
     for p in "${params[@]}"; do a+=("-P${top}.${p}"); done
-    t0="$(now)"
-    "$tool" "${a[@]}" "${sources[@]}"
-    t1="$(now)"
-    record compile "$(elapsed "$t0" "$t1")"
+    measure compile "$tool" "${a[@]}" "${sources[@]}"
     # -M: where vvp finds system.vpi and the other VPI modules.
     run=("$tool2" -M "$ivlbase" -n "$work/sim.vvp")
     ;;
@@ -165,10 +213,7 @@ case "$sim" in
     # Verilator's -G<name>=<value> sets a parameter of the top module;
     # -g/<top>/<name>=<value> is xezim's form limited to that module.
     for p in "${params[@]}"; do a+=("-g/${top}/${p}"); done
-    t0="$(now)"
-    "$tool" "${a[@]}" "${sources[@]}"
-    t1="$(now)"
-    record compile "$(elapsed "$t0" "$t1")"
+    measure compile "$tool" "${a[@]}" "${sources[@]}"
     # DPI C/C++ sources are not part of the compiled design: xezim takes
     # them when the design runs, and compiles them then with the host
     # compiler. So for xezim, a DPI-C build is timed in the run step, not in
@@ -182,11 +227,8 @@ case "$sim" in
 esac
 
 cd "$work/run"
-t0="$(now)"
 status=0
-"${run[@]}" "${plusargs[@]}" > _execute/stdout.log 2>&1 || status=$?
-t1="$(now)"
-record run "$(elapsed "$t0" "$t1")"
+measure run "${run[@]}" "${plusargs[@]}" > _execute/stdout.log 2>&1 || status=$?
 cat _execute/stdout.log
 if [[ $status -ne 0 ]]; then
   echo "FAIL: $sim exited with status $status" >&2
@@ -226,4 +268,6 @@ for e in "${expects[@]}"; do
     exit 1
   fi
 done
-echo "PASS: $sim, $(cat _rtlmeter_cycles.txt 2>/dev/null || echo '?') cycles"
+ran="$(cat _rtlmeter_cycles.txt 2>/dev/null || echo '?')"
+[[ -n "$timing" ]] && echo "cycles $ran" >> "$timing"
+echo "PASS: $sim, $ran cycles"
