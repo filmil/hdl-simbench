@@ -7,7 +7,7 @@ Work in progress; see https://github.com/filmil/hdl-simbench/issues/1.
 
 ## What is compared
 
-- SystemVerilog: Verilator, Icarus Verilog, xezim (0.11.7.bcr.1, from filmil/bazel-registry; built with clang 23.1.5 and a Debian bullseye sysroot).
+- SystemVerilog: Verilator, Icarus Verilog, xezim (0.11.7.bcr.1, from filmil/bazel-registry: Rust, with its C code and final link done by a pinned clang 23.1.5 and a Debian bullseye sysroot).
 - VHDL: GHDL, NVC.
 
 Only open-source simulators are reported. Commercial simulator licenses
