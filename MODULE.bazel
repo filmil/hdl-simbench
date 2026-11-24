@@ -47,3 +47,32 @@ pip.parse(
     requirements_lock = "//tools:requirements_lock.txt",
 )
 use_repo(pip, "pypi")
+
+# VHDL simulators.
+
+# GHDL, built from source by its BCR module, with its mcode back end: GHDL's
+# default on x86-64, which compiles the design in memory when it starts.
+# The module's other back end, llvm-jit, needs llvm-project built from
+# source. GHDL's Ada parts use the GNAT that rules_ada pins: GNAT 15.3.0 from
+# periareon/hermetic-gnat 2026.09.30, whose published .sha256
+# (36603b28...0aec) matches GitHub's digest of the archive and rules_ada's
+# pinned integrity.
+bazel_dep(name = "ghdl", version = "6.0.0.bcr.5")
+
+# C, for NEORV32's image_gen tool.
+bazel_dep(name = "rules_cc", version = "0.2.19")
+
+# The RISC-V GCC that builds the programs NEORV32 runs (CoreMark). It is the
+# xPack build of GCC 15.2.0 with newlib, as NEORV32's own makefiles expect
+# (riscv-none-elf-gcc). The sha256 below is the one xPack publishes in
+# xpack-riscv-none-elf-gcc-15.2.0-1-linux-x64.tar.gz.sha next to the archive,
+# and GitHub's own digest of the archive matches it. Linux x86-64 only.
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_archive(
+    name = "riscv_gcc",
+    build_file = "//bench/vhdl:riscv_gcc.BUILD.bazel",
+    sha256 = "aaaa8060c914851a3e5ee1ba82cc3d6f80972f90638a05c6e823a37557a33758",
+    strip_prefix = "xpack-riscv-none-elf-gcc-15.2.0-1",
+    urls = ["https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v15.2.0-1/xpack-riscv-none-elf-gcc-15.2.0-1-linux-x64.tar.gz"],
+)

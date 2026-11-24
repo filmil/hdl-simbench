@@ -1,0 +1,29 @@
+# CoreMark (https://github.com/eembc/coremark), EEMBC's CPU benchmark.
+# Copied unchanged from commit 1f483d5b8316753a742cbf5590caf5bd0a4e4777, the
+# submodule commit that NEORV32 v1.13.8 pins: the core sources, README.md and
+# LICENSE.md. LICENSE.md holds the code's license (Apache-2.0) and EEMBC's
+# acceptable use agreement for the CoreMark trademark. The bench runs
+# CoreMark as a workload for the simulators. It does not report CoreMark
+# scores of the simulated CPU.
+
+package(default_visibility = ["//visibility:public"])
+
+licenses(["notice"])
+
+exports_files(["LICENSE.md"])
+
+filegroup(
+    name = "srcs",
+    srcs = [
+        "core_list_join.c",
+        "core_main.c",
+        "core_matrix.c",
+        "core_state.c",
+        "core_util.c",
+    ],
+)
+
+filegroup(
+    name = "hdrs",
+    srcs = ["coremark.h"],
+)
