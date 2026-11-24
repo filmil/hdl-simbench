@@ -19,6 +19,13 @@ rtlmeter_design(
             "Check for declaration after use",
             "serv_state.v uses trap_pending before its declaration, which Icarus rejects",
         ),
+        # xezim 0.11.7, strict IEEE 1800 (6.5): the same use before
+        # declaration. Its --relax-use-before-decl would accept it; the bench
+        # gives no simulator such an allowance.
+        "xezim": (
+            "referenced before its declaration",
+            "serv_state.v uses trap_pending before its declaration, which strict IEEE 1800 rejects",
+        ),
     },
 )
 

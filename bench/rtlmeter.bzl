@@ -13,10 +13,12 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 CI_MAX_CYCLES = 100000
 
 # Each long case also gets a smoke test that CI runs: the same compile and
-# files, stopped after this many cycles by RTLMeter's own +max_cycles. As in
+# files, stopped after this many cycles by RTLMeter's own +max_cycles. Kept
+# small, so that the slowest simulator fits a test's 5 minutes (xezim runs
+# VeeR-EL2 at a few hundred cycles a second in CI). As in
 # RTLMeter, a run stopped that way skips the cycle check and the post hook;
 # it must print the harness's "+max_cycles reached" line instead.
-SMOKE_CYCLES = 20000
+SMOKE_CYCLES = 5000
 
 _SIMULATORS = {
     "verilator": struct(
