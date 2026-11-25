@@ -1,5 +1,7 @@
 # hdl-simbench
 
+[![CI](https://github.com/filmil/hdl-simbench/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/filmil/hdl-simbench/actions/workflows/ci.yml)
+
 VHDL and SystemVerilog simulators compared on the same designs, under
 comparable conditions, built with Bazel.
 
