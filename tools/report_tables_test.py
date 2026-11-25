@@ -25,6 +25,16 @@ class ReportTablesTest(unittest.TestCase):
 
     def test_tex_escapes_specials(self):
         self.assertEqual(report_tables.tex("a_b&c%d#e"), "a\\_b\\&c\\%d\\#e")
+        self.assertEqual(report_tables.tex("{x}"), "\\{x\\}")
+        self.assertEqual(report_tables.tex("~^\\"),
+                         "\\textasciitilde{}\\textasciicircum{}\\textbackslash{}")
+
+    def test_missing_min_or_max_is_a_dash(self):
+        cells = report_tables.cell_row(dict(ROW, run_s_max=""))
+        self.assertEqual(cells[7], "268.88 [252.61----]")
+
+    def test_cap_is_shown(self):
+        self.assertEqual(report_tables.cell_row(dict(ROW, max_cycles="10000"))[3], "10000")
 
     def test_ok_row_has_ranges_from_the_summary(self):
         cells = report_tables.cell_row(ROW)
@@ -53,23 +63,46 @@ class ReportTablesTest(unittest.TestCase):
 
     def test_large_numbers_use_exponents(self):
         self.assertEqual(report_tables.num("6666666.7", 0), "6.67e+06")
+        # Rounded first: 99999.6 rounds to 100000, so it takes the exponent.
+        self.assertEqual(report_tables.num("99999.6", 0), "1.00e+05")
+        self.assertEqual(report_tables.num("99999.4", 0), "99999")
 
-    def test_writes_one_table_per_language_and_provenance(self):
-        d = tempfile.mkdtemp()
-        src = os.path.join(d, "summary.csv")
-        with open(src, "w", newline="") as f:
+    def test_language_follows_the_simulator(self):
+        self.assertEqual(report_tables.language(dict(ROW, design="other")), "vhdl")
+        self.assertEqual(report_tables.language(dict(ROW, simulator="xezim")), "sv")
+
+    def _summary(self, d, campaign, rows):
+        os.makedirs(os.path.join(d, campaign))
+        path = os.path.join(d, campaign, "summary.csv")
+        with open(path, "w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=list(ROW))
             w.writeheader()
-            w.writerow(ROW)
-            w.writerow(dict(ROW, design="VeeR-EL2", simulator="verilator"))
-        out, prov = os.path.join(d, "t.tex"), os.path.join(d, "p.tex")
-        report_tables.main(["--out", out, "--provenance", prov, "2=" + src])
-        t = open(out).read()
-        self.assertEqual(t.count("\\begin{table}"), 2)
-        self.assertIn("SystemVerilog, campaign 2", t)
-        self.assertIn("VHDL, campaign 2", t)
-        self.assertIn("\\texttt{6d74d4c} (clean)", open(prov).read())
+            for row in rows:
+                w.writerow(row)
+        return path
 
+    def test_tables_per_campaign_host_and_language_with_provenance(self):
+        d = tempfile.mkdtemp()
+        later = self._summary(d, "20261126", [
+            ROW,
+            dict(ROW, design="VeeR-EL2", simulator="verilator"),
+            dict(ROW, host="other", git_commit="abc1234"),
+        ])
+        earlier = self._summary(d, "20261125", [dict(ROW, git_commit="0000001")])
+        out, prov = os.path.join(d, "t.tex"), os.path.join(d, "p.tex")
+        # Given out of order: campaigns come out in date order.
+        report_tables.main(["--out", out, "--provenance", prov, later, earlier])
+        with open(out) as f:
+            t = f.read()
+        with open(prov) as f:
+            p = f.read()
+        self.assertEqual(t.count("\\begin{table}"), 4)
+        self.assertLess(t.index("campaign 20261125"), t.index("campaign 20261126"))
+        self.assertIn("SystemVerilog, campaign 20261126, host i7-7700", t)
+        self.assertIn("VHDL, campaign 20261126, host other", t)
+        self.assertIn("Campaign 20261126, host other: commit \\texttt{abc1234}", p)
+        self.assertIn("Campaign 20261125, host i7-7700: commit \\texttt{0000001}", p)
+        self.assertEqual(p.count("\\item"), 3)
 
 if __name__ == "__main__":
     unittest.main()

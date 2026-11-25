@@ -4,32 +4,27 @@
 
 load("@rules_latex_host//latex:defs.bzl", "latex_document")
 
-# The campaigns, in order: <campaign>=<summary.csv>.
-# do not sort: campaigns are listed in the order they ran.
-_CAMPAIGNS = [
-    ("1", "//results:20261125/summary.csv"),
-    ("2", "//results:20261126/summary.csv"),
-]
-
 genrule(
     name = "tables",
-    srcs = [s for _, s in _CAMPAIGNS],
+    srcs = ["//results:summaries"],
     outs = [
         "tables.tex",
         "provenance.tex",
     ],
-    cmd = "$(execpath //tools:report_tables) --out $(execpath tables.tex) --provenance $(execpath provenance.tex) " +
-          " ".join(["%s=$(execpath %s)" % (c, s) for c, s in _CAMPAIGNS]),
+    cmd = "$(execpath //tools:report_tables) --out $(execpath tables.tex) " +
+          "--provenance $(execpath provenance.tex) $(execpaths //results:summaries)",
     tools = ["//tools:report_tables"],
 )
 
 # The release tag, given by the release workflow with
-# --define=REPORT_VERSION=<tag>; other builds say "unreleased", so that
-# they stay cacheable.
+# --define=REPORT_VERSION=<tag>, which checks that it is v<digits and
+# dots>[-<letters, digits, dots>]: nothing LaTeX or the shell would read
+# specially. Other builds say "unreleased" (.bazelrc), so that they stay
+# cacheable.
 genrule(
     name = "version",
     outs = ["version.tex"],
-    cmd = "echo '\\newcommand{\\ReportVersion}{$(REPORT_VERSION)}' > $@",
+    cmd = "printf '%s\\n' '\\newcommand{\\ReportVersion}{$(REPORT_VERSION)}' > $@",
 )
 
 latex_document(

@@ -1,7 +1,12 @@
 load("@rules_python//python:py_test.bzl", "py_test")
 
-# The summaries the report (//report) is made from.
-exports_files(glob(["*/summary.csv"]))
+# Every campaign's summary, which the report (//report) is made from: a
+# new campaign directory is in the report without further edits.
+filegroup(
+    name = "summaries",
+    srcs = glob(["*/summary.csv"]),
+    visibility = ["//report:__pkg__"],
+)
 
 # Every published campaign still follows from its per-run files.
 py_test(

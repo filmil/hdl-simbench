@@ -8,7 +8,7 @@
 \documentclass[11pt]{article}
 \usepackage[margin=2cm]{geometry}
 \usepackage{graphicx}
-\usepackage{lscape}
+\usepackage{pdflscape}
 
 \input{version}
 
@@ -45,7 +45,7 @@ C and C++ are compiled by clang from a pinned LLVM release against a
 pinned Debian sysroot (glibc 2.31), optimized and without debug
 information. Each timed run records every simulator command line, and each
 simulator binary's dynamic dependencies are checked on every run; a binary
-that needs anything from the host other than glibc fails the run. The
+that needs anything else from the host fails the run. The
 repository's \texttt{README.md} and \texttt{bench/vhdl/README.md} list
 every compiler and simulator flag.
 
@@ -70,7 +70,8 @@ needs more runs.
 \item A cell with a failing run is reported as failing.
 \item A rate from runs under one second, or with a run that the timer
 measured as zero, is marked with a dagger ($\dagger$): wall time is
-counted in hundredths of a second.
+counted in hundredths of a second. With a run measured as zero there is
+no rate at all, which the tables show as ``n/a''.
 \item A cell whose runs simulated different numbers of cycles is not
 summarized.
 \end{itemize}
@@ -79,8 +80,8 @@ long ones, cycles per second.
 
 \section{Results}
 
-The tables follow on landscape pages. A dagger ($\dagger$) marks a
-resolution-limited rate; ``n/a'' means the timer measured a run as zero.
+The tables follow on landscape pages, one per campaign, host and
+language. A dagger ($\dagger$) marks a resolution-limited rate.
 
 \begin{landscape}
 \input{tables}
