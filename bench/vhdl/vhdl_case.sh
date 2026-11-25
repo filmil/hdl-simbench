@@ -174,6 +174,13 @@ check_elf() {
   fi
   if [[ -n "$glibc" && "$(printf '%s\n2.31\n' "$glibc" | sort -V | tail -1)" != 2.31 ]]; then
     echo "FAIL: $bin needs glibc $glibc, newer than the sysroot's 2.31" >&2
+    # Which symbols: those bound to a version newer than 2.31.
+    "$readelf" --dyn-syms --wide "$bin" | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /@GLIBC_[0-9]/) print $i }' |
+      sed -n 's/.*@\(GLIBC_[0-9.]*\).*/&/p' | sort -u |
+      while IFS= read -r sym; do
+        v="${sym##*@GLIBC_}"
+        if [[ "$(printf '%s\n2.31\n' "$v" | sort -V | tail -1)" != 2.31 ]]; then echo "  $sym" >&2; fi
+      done || true
     exit 1
   fi
 }

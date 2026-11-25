@@ -1,0 +1,27 @@
+# GNAT 16.1.0 for Linux x86-64, laid out as rules_ada 0.3.0's own GNAT
+# repository, with its files visible to //toolchains/gnat.
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(["bin/**", "lib/**"]))
+
+filegroup(
+    name = "ada_std",
+    srcs = glob([
+        "lib/gcc/x86_64-pc-linux-gnu/16.1.0/adalib/**",
+        "lib/gcc/x86_64-pc-linux-gnu/16.1.0/adainclude/**",
+    ]),
+)
+
+filegroup(
+    name = "compiler_lib",
+    srcs = glob(
+        [
+            "lib/**",
+            "libexec/**",
+        ],
+        exclude = [
+            "lib/gcc/x86_64-pc-linux-gnu/16.1.0/adalib/**",
+            "lib/gcc/x86_64-pc-linux-gnu/16.1.0/adainclude/**",
+        ],
+    ),
+)
