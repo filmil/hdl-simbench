@@ -30,3 +30,23 @@ py_test(
     srcs = ["rtlmeter_import_test.py"],
     deps = [":rtlmeter_import_lib"],
 )
+
+# Summarizes //bench:timed_runs CSV files by README.md's "Which runs count":
+#   bazel run //tools:summarize_runs -- $PWD/results/slot1.csv
+py_library(
+    name = "summarize_runs_lib",
+    srcs = ["summarize_runs.py"],
+    imports = ["."],
+)
+
+py_binary(
+    name = "summarize_runs",
+    srcs = ["summarize_runs.py"],
+)
+
+py_test(
+    name = "summarize_runs_test",
+    size = "small",
+    srcs = ["summarize_runs_test.py"],
+    deps = [":summarize_runs_lib"],
+)
