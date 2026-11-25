@@ -144,14 +144,21 @@ single_version_override(
     patches = ["//bench/vhdl:ghdl.patch"],
 )
 
-# NVC 1.22.0, prebuilt with LLVM by bazel_toolchains_nvc's release workflow,
-# which attests the binary's build provenance; 0.2.0 pins that attested
-# binary (nvc-1.22.0-324ed157-r2) by sha256. The bench runs the binary
-# directly (bench/vhdl/vhdl_case.sh), so no toolchain is registered.
-bazel_dep(name = "bazel_toolchains_nvc", version = "0.2.0")
-
-nvc_binary = use_extension("@bazel_toolchains_nvc//nvc:extension.bzl", "nvc_binary")
-use_repo(nvc_binary, "nvc_prebuilt")
+# NVC 1.22.0 (commit 324ed157) with its LLVM code generator, the release
+# binary of filmil/bazel_toolchains_nvc. Its build provenance was checked
+# with gh attestation verify (signer workflow release.yml, tag
+# nvc-1.22.0-324ed157-r2) before this sha256 was pinned, in
+# bazel_toolchains_nvc 0.2.0's nvc/versions.bzl; Bazel itself checks only
+# the sha256. Fetched directly rather than through that module, whose
+# dependencies (rules_nvc and its build and test tools) would change the
+# versions this workspace resolves for shared modules such as zlib.
+http_archive(
+    name = "nvc_linux_x86_64",
+    build_file = "//bench/vhdl:nvc.BUILD.bazel",
+    sha256 = "046191b1d06e23cd3fea57df050ac5b99936d18516434d900ffb4aa61520cbdd",
+    strip_prefix = "nvc-1.22.0-324ed157-r2-linux-x86_64",
+    urls = ["https://github.com/filmil/bazel_toolchains_nvc/releases/download/nvc-1.22.0-324ed157-r2/nvc-1.22.0-324ed157-r2-linux-x86_64.tar.gz"],
+)
 
 # C, for NEORV32's image_gen tool.
 bazel_dep(name = "rules_cc", version = "0.2.28")

@@ -1,0 +1,11 @@
+# The NVC release tarball of filmil/bazel_toolchains_nvc: bin/nvc and the
+# standard libraries it compiled, lib/nvc (std, ieee, nvc, ...).
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["bin/nvc"])
+
+# The directory is the label: vhdl_case.sh passes it to NVC with -L.
+filegroup(
+    name = "std",
+    srcs = ["lib/nvc"],
+)

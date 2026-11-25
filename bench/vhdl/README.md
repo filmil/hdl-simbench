@@ -71,7 +71,7 @@ built from source, and the bench does not use it.
 
 | | |
 |---|---|
-| Build | NVC 1.22.0 (commit 324ed157), LLVM 18.1.8 code generator, from `bazel_toolchains_nvc` 0.2.0: release `nvc-1.22.0-324ed157-r2`, built by that repository's release workflow in Ubuntu 20.04, with attested build provenance, pinned by sha256 |
+| Build | NVC 1.22.0 (commit 324ed157), LLVM 18.1.8 code generator, from filmil/bazel_toolchains_nvc release `nvc-1.22.0-324ed157-r2`, built by its release workflow in Ubuntu 20.04, attestation checked before pinning; fetched by sha256 (the same pin as bazel_toolchains_nvc 0.2.0) |
 | Analysis | `nvc --std=2008 -L <std libs> --work=<library>:lib/<library> -L lib -a <files>` |
 | Elaboration | `nvc --std=2008 -L <std libs> --work=work:lib/work -L lib -e -O2 coremark_tb` |
 | Run | `nvc --std=2008 -L <std libs> --work=work:lib/work -L lib -r coremark_tb --ieee-warnings=off --exit-severity=error` |
