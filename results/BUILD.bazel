@@ -1,14 +1,14 @@
 load("@rules_python//python:py_test.bzl", "py_test")
 
-# The published results still follow from their per-run files (README.md).
+# Every published campaign still follows from its per-run files.
 py_test(
     name = "results_test",
     size = "small",
     srcs = ["results_test.py"],
     data = glob([
-        "*.csv",
-        "*.md",
-        "commands/*.txt",
+        "*/*.csv",
+        "*/*.md",
+        "*/commands/*.txt",
     ]),
     deps = ["//tools:summarize_runs_lib"],
 )

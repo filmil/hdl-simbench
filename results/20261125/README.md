@@ -52,6 +52,6 @@ points into `commands/`; in the commands records the home directory reads
 `<execroot>`, and the load addresses `ldd` prints (random on every run)
 are removed.
 
-`//results/20261125:results_test` checks that the summary still follows
+`//results:results_test` checks that the summary still follows
 from the per-run files, that every `commands_file` exists, and that the
 records hold no home paths.
