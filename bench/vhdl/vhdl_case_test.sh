@@ -11,7 +11,8 @@ set -euo pipefail
 case_sh="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 w="$(mktemp -d "${TEST_TMPDIR:-/tmp}/vhdl_case_test.XXXXXX")"
 cd "$w"
-mkdir -p p/std/v08 n
+mkdir -p p/std/v08 n/std.08
+touch n/std.08/_NVC_LIB n/std.08/STD.STANDARD
 touch p/std/v08/std-obj08.cf a.vhd b.vhd c.vhd
 cat > stub.sh <<'STUB'
 #!/usr/bin/env bash
@@ -39,7 +40,7 @@ want() { # want <file> <line>
   grep -qxF -- "$2" "$1" || { cat "$1" >&2; fail "$1 lacks: $2"; }
 }
 
-files=(-- @lib=neo a.vhd b.vhd @lib=work c.vhd @ghdl-libs p/std/v08/std-obj08.cf @nvc-libs n)
+files=(-- @lib=neo a.vhd b.vhd @lib=work c.vhd @ghdl-libs p/std/v08/std-obj08.cf @nvc-libs n/std.08/_NVC_LIB n/std.08/STD.STANDARD)
 
 bash "$case_sh" --sim ghdl --tool stub.sh --top top --expect "hello OK" \
   --timing t1 --commands c1 "${files[@]}" > /dev/null
@@ -61,6 +62,14 @@ want c2 "compile $w/stub.sh --std=2008 -L $w/n --work=work:lib/work -L lib -a $w
 want c2 "compile $w/stub.sh --std=2008 -L $w/n --work=work:lib/work -L lib -e -O2 top"
 want c2 "run $w/stub.sh --std=2008 -L $w/n --work=work:lib/work -L lib -r top --ieee-warnings=off --exit-severity=error"
 [[ "$(cut -d' ' -f1 t2 | tr '\n' ' ')" == "compile run cycles " ]] || fail "t2: $(cat t2)"
+
+# NVC needs its standard libraries: without them it fails and writes no
+# timings.
+if bash "$case_sh" --sim nvc --tool stub.sh --top top --timing t11 \
+  -- a.vhd @nvc-libs n/std.08/STD.STANDARD > /dev/null 2>&1; then
+  fail "nvc without std.08/_NVC_LIB passed"
+fi
+[[ ! -e t11 ]] || fail "nvc without its libraries wrote timings"
 
 # The host-library check: glibc passes, anything else fails unless allowed.
 NEEDED="libc.so.6 libm.so.6" bash "$case_sh" --sim ghdl --tool stub.sh --top top \

@@ -142,7 +142,7 @@ sh_test(
         "@lib=work",
         "$(rootpath :coremark_tb.vhd)",
         "@nvc-libs",
-        "$(rootpath @nvc_linux_x86_64//:std)",
+        "$(rootpaths @nvc_linux_x86_64//:std)",
     ],
     data = [
         ":coremark_1_imem_image",

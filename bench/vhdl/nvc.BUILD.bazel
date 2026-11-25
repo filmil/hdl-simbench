@@ -4,8 +4,9 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files(["bin/nvc"])
 
-# The directory is the label: vhdl_case.sh passes it to NVC with -L.
+# Every file of the standard libraries; vhdl_case.sh finds their directory
+# from lib/nvc/std.08/_NVC_LIB and passes it to NVC with -L.
 filegroup(
     name = "std",
-    srcs = ["lib/nvc"],
+    srcs = glob(["lib/nvc/**"]),
 )

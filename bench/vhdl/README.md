@@ -81,9 +81,13 @@ generation at `-O2`, its default level, written out. How much of the code
 generation NVC defers to `-r` is to be checked with its own statistics
 before the numbers are published; until then, compare the sum of
 "compile" and "run".
-The run options turn off IEEE library warnings, as GHDL's
-`--ieee-asserts=disable` does, and stop on an error, as GHDL's
-`--assert-level=error` does. The standard libraries are the ones that came
+The run options are the closest NVC has to GHDL's: `--ieee-warnings=off`
+silences warnings from the IEEE libraries (GHDL's `--ieee-asserts=disable`
+silences all of their assertions; an IEEE library error still stops NVC),
+and `--exit-severity=error` stops on an error, as GHDL's
+`--assert-level=error` does. Linux x86-64 only, like the binary. The
+tarball has no shared libraries for NVC to load, so `--readelf` on the
+binary covers what it takes from the host. The standard libraries are the ones that came
 with the binary, compiled by it.
 
 ## Comparing the numbers

@@ -35,7 +35,7 @@
 #       [--commands <file>] [--readelf <llvm-readelf>]
 #       [--allow-host-lib <soname>]...
 #       -- [@lib=<library>] <file>... [@lib=<library> <file>...]...
-#          [@ghdl-libs <file>...] [@nvc-libs <dir>]
+#          [@ghdl-libs <file>...] [@nvc-libs <file>...]
 #
 # With --readelf, the simulator binary may take nothing from the host but
 # glibc 2.31 or older, and the libraries --allow-host-lib names, as in
@@ -45,8 +45,10 @@
 # the last @lib= names (work before any). The files after @ghdl-libs are
 # GHDL's compiled std and ieee libraries (@ghdl//:vhdl_libs_v08); GHDL's
 # prefix is the directory that holds their std/v08 and ieee/v08. The
-# directory after @nvc-libs holds NVC's compiled standard libraries
-# (@nvc_prebuilt//:std), which NVC gets with -L. Markers
+# files after @nvc-libs are NVC's compiled standard libraries
+# (@nvc_linux_x86_64//:std); their directory, the one that holds
+# std.08/_NVC_LIB, goes to NVC with -L. The library markers come last:
+# every file after them belongs to the libraries. Markers
 # instead of flags let a Bazel $(rootpaths) expansion, which becomes one
 # argument per file, follow a marker.
 #
@@ -84,7 +86,8 @@ for a in "$@"; do
     @nvc-libs) mode=nvc ;;
     *)
       if [[ $mode == nvc ]]; then
-        nvclibs="$(abs "$a")"
+        # .../<dir>/std.08/_NVC_LIB -> <dir>
+        if [[ "$a" == */std.08/_NVC_LIB ]]; then nvclibs="$(abs "${a%/std.08/_NVC_LIB}")"; fi
       elif [[ $mode == ghdl ]]; then
         # .../<prefix>/std/v08/std-obj08.cf -> <prefix>
         if [[ "$a" == */std/v08/std-obj08.cf ]]; then prefix="$(abs "${a%/std/v08/std-obj08.cf}")"; fi
@@ -215,7 +218,7 @@ case "$sim" in
     run=("$tool" -r "${common[@]}" "$top" --max-stack-alloc=0 --ieee-asserts=disable --assert-level=error)
     ;;
   nvc)
-    if [[ -z "$nvclibs" ]]; then echo "nvc needs @nvc-libs <dir>" >&2; exit 2; fi
+    if [[ -z "$nvclibs" || ! -d "$nvclibs" ]]; then echo "nvc needs @nvc-libs with std.08/_NVC_LIB" >&2; exit 2; fi
     common=(--std=2008 -L "$nvclibs")
     mkdir lib
     for g in "${groups[@]}"; do
