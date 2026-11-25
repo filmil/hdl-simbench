@@ -202,6 +202,8 @@ for target in "${targets[@]}"; do
       echo "stop: ${free_gb} GB free under $outbase, under ${min_free_gb} GB" >&2
       exit 1
     fi
+    # Bazel leaves a test's outputs read-only.
+    [[ -d "$outputs" ]] && chmod -R u+w "$outputs"
     rm -f "$outputs/timing.txt" "$outputs/commands.txt"
     samples="$(mktemp)"
     ( while :; do load1 >> "$samples"; sleep 2; done ) &
