@@ -24,20 +24,38 @@ genrule(
     cmd = "sed -e 's/^#define ITERATIONS (2000)$$/#ifndef ITERATIONS\\n#define ITERATIONS (2000)\\n#endif/' $< > $@ && grep -q '^#ifndef ITERATIONS$$' $@",
 )
 
+# core_portme.c, unchanged, next to the patched header: its own
+# #include "core_portme.h" looks in its directory first, so there it finds
+# the patched header and never the unchanged one.
+genrule(
+    name = "core_portme_c",
+    srcs = ["//third_party/neorv32:sw/example/coremark/core_portme.c"],
+    outs = ["portme/core_portme.c"],
+    cmd = "cp $< $@",
+)
+
 # One CoreMark iteration takes NEORV32 about a million cycles, so the test
-# image runs one; timed runs use more (see README.md).
+# image runs one. The timed runs' image and its count come with them.
 coremark_image(
     name = "coremark_1",
     iterations = 1,
 )
 
 # CoreMark's checksums for its performance run (seeds 0, 0, 0x66; 2000 bytes
-# of data), from the known-CRC tables in core_main.c. They do not depend on
-# the iteration count. A short run always prints "Errors detected", because
-# it runs for less than CoreMark's 10 seconds (of simulated time), so that
-# line is not a failure here; a wrong checksum prints "ERROR! ... crc".
+# of data). seedcrc, crclist, crcmatrix and crcstate are from the known-CRC
+# tables in core_main.c and do not depend on the iteration count; they cover
+# the first iteration only. crcfinal covers every iteration, so it depends on
+# the count: 0xe714 for one iteration, from the same sources built for the
+# host with ITERATIONS=1 (whose other checksums match the tables). A short
+# run always prints "Errors detected", because it runs for less than
+# CoreMark's 10 seconds (of simulated time), so that line is not a failure
+# here; a wrong checksum prints "ERROR! ... crc".
 # Bazel splits test arguments at spaces, so each text is quoted inside.
-_COREMARK_CHECKS = [
+_COREMARK_1_CHECKS = [
+    "--expect",
+    "'Iterations       : 1'",
+    "--expect",
+    "'[0]crcfinal      : 0xe714'",
     "--expect",
     "'seedcrc          : 0xe9f5'",
     "--expect",
@@ -63,7 +81,7 @@ sh_test(
         "$(rootpath @ghdl//:ghdl_mcode)",
         "--top",
         "coremark_tb",
-    ] + _COREMARK_CHECKS + [
+    ] + _COREMARK_1_CHECKS + [
         # do not sort: the files are analysed in this order.
         "--",
         # The program's image is a package that neorv32_imem uses, so it is
@@ -89,4 +107,14 @@ sh_test(
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",
     ],
+)
+
+# vhdl_case.sh itself, with a stub simulator: the recorded commands, one
+# command per library, and no timings for a failed run.
+sh_test(
+    name = "vhdl_case_test",
+    size = "small",
+    srcs = ["vhdl_case_test.sh"],
+    args = ["$(rootpath :vhdl_case.sh)"],
+    data = [":vhdl_case.sh"],
 )

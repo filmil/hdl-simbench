@@ -33,8 +33,12 @@
 # the last @lib= names (work before any). The files after @ghdl-libs are
 # GHDL's compiled std and ieee libraries (@ghdl//:vhdl_libs_v08); GHDL's
 # prefix is the directory that holds their std/v08 and ieee/v08. Markers
-# instead of flags let a Bazel $(rootpaths) expansion, which is one
-# space-separated argument, follow a marker.
+# instead of flags let a Bazel $(rootpaths) expansion, which becomes one
+# argument per file, follow a marker.
+#
+# Consecutive files of one library are analysed by one simulator command,
+# in the order given, so that process start-up is not counted per file.
+# The timings are written only when the run passes every check.
 
 set -euo pipefail
 
@@ -90,7 +94,9 @@ trap 'rm -rf "$work"' EXIT
 cd "$work"
 
 now() { date +%s.%N; }
-record() { [[ -n "$timing" ]] && printf '%s %s\n' "$1" "$2" >> "$timing"; return 0; }
+record() {
+  if [[ -n "$timing" ]]; then printf '%s %s\n' "$1" "$2" >> "$timing"; fi
+}
 elapsed() { awk -v a="$1" -v b="$2" 'BEGIN { printf "%.3f", b - a }'; }
 # step: runs the command after the step name, and records it.
 step() {
@@ -100,16 +106,27 @@ step() {
   fi
   "$@"
 }
+# groups: one "<library>\t<file> <file>..." entry per run of consecutive
+# files in the same library, in analysis order.
+groups=() glib="" gfiles=""
+for s in "${srcs[@]}"; do
+  l="${s%% *}" f="${s#* }"
+  if [[ "$l" != "$glib" && -n "$gfiles" ]]; then groups+=("$glib"$'\t'"$gfiles"); gfiles=""; fi
+  glib="$l" gfiles="${gfiles:+$gfiles }$f"
+done
+groups+=("$glib"$'\t'"$gfiles")
 
 case "$sim" in
   ghdl)
     if [[ -z "$prefix" ]]; then echo "ghdl needs @ghdl-libs with std/v08/std-obj08.cf" >&2; exit 2; fi
     export GHDL_PREFIX="$prefix"
+    if [[ -n "$commands" ]]; then printf 'env GHDL_PREFIX=%q\n' "$GHDL_PREFIX" >> "$commands"; fi
     common=(--std=08 --workdir=lib -Plib)
     mkdir lib
     t0="$(now)"
-    for s in "${srcs[@]}"; do
-      step compile "$tool" -a "${common[@]}" --work="${s%% *}" "${s#* }"
+    for g in "${groups[@]}"; do
+      read -r -a files <<< "${g#*$'\t'}"
+      step compile "$tool" -a "${common[@]}" --work="${g%%$'\t'*}" "${files[@]}"
     done
     t1="$(now)"
     # As NEORV32's own sim/ghdl.sh runs it.
@@ -119,11 +136,14 @@ case "$sim" in
     common=(--std=2008)
     t0="$(now)"
     mkdir lib
-    for s in "${srcs[@]}"; do
-      l="${s%% *}"
-      step compile "$tool" "${common[@]}" --work="$l:lib/$l" -L lib -a "${s#* }"
+    for g in "${groups[@]}"; do
+      l="${g%%$'\t'*}"
+      read -r -a files <<< "${g#*$'\t'}"
+      step compile "$tool" "${common[@]}" --work="$l:lib/$l" -L lib -a "${files[@]}"
     done
-    step compile "$tool" "${common[@]}" --work=work:lib/work -L lib -e "$top"
+    # -O2 is NVC's default code generation level, written out so that the
+    # record shows it.
+    step compile "$tool" "${common[@]}" --work=work:lib/work -L lib -e -O2 "$top"
     t1="$(now)"
     run=("$tool" "${common[@]}" --work=work:lib/work -L lib -r "$top" --ieee-warnings=off --exit-severity=error)
     ;;
@@ -132,13 +152,13 @@ case "$sim" in
     exit 2
     ;;
 esac
-record compile "$(elapsed "$t0" "$t1")"
+compile_s="$(elapsed "$t0" "$t1")"
 
 t0="$(now)"
 status=0
 step run "${run[@]}" > stdout.log 2>&1 || status=$?
 t1="$(now)"
-record run "$(elapsed "$t0" "$t1")"
+run_s="$(elapsed "$t0" "$t1")"
 cat stdout.log
 if [[ $status -ne 0 ]]; then
   echo "FAIL: $sim exited with status $status" >&2
@@ -156,4 +176,6 @@ for r in "${rejects[@]}"; do
     exit 1
   fi
 done
+record compile "$compile_s"
+record run "$run_s"
 echo "PASS: $sim"

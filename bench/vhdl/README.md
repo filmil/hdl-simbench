@@ -4,7 +4,10 @@ NEORV32 v1.13.8, a RISC-V processor in VHDL, runs CoreMark under each VHDL
 simulator. `coremark_tb.vhd` boots the program and ends the simulation when
 CoreMark returns, so every simulator runs the same instructions and stops
 at the same simulated time. A run counts only if it prints CoreMark's known
-checksums.
+checksums and the iteration count it was built with. Its final checksum,
+which covers every iteration, is checked against the same CoreMark built
+for the host with the same count. A run that fails a check writes no
+timings.
 
 CoreMark is a trademark of EEMBC. The bench runs CoreMark® as a workload for
 the simulators. It does not measure the simulated CPU, and its numbers are
@@ -59,8 +62,9 @@ and matches that build.
 mcode has no optimization levels: it generates the design's machine code in
 memory when `ghdl -r` starts, so that time counts as "run". The run options
 are the ones NEORV32's `sim/ghdl.sh` uses. GHDL's LLVM and GCC back ends,
-which compile ahead of time, can run faster than mcode; they are not in the
-BCR module.
+which compile ahead of time, can run faster than mcode; the BCR module does
+not offer them. Its only other back end, llvm-jit, needs llvm-project
+built from source, and the bench does not use it.
 
 ### NVC
 
@@ -71,6 +75,8 @@ it runs.
 ## Comparing the numbers
 
 "compile" and "run" split the work differently per simulator (see
-`vhdl_case.sh`), so the sum of the two is the comparable number. Each
+`vhdl_case.sh`), so the sum of the two is the comparable number. Analysis
+runs one simulator command per library, with that library's files in
+order, so process start-up is not counted once per file. Each
 timed run also records the machine, the simulator's version and the
 command lines.

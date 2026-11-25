@@ -119,6 +119,8 @@ bazel_dep(name = "ghdl", version = "6.0.0.bcr.5")
 # upstream's release flags, -O -gnatn (see the patch's header).
 single_version_override(
     module_name = "ghdl",
+    # The patch is written against this version.
+    version = "6.0.0.bcr.5",
     patch_strip = 1,
     patches = ["//bench/vhdl:ghdl_ada_opt.patch"],
 )

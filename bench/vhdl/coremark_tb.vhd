@@ -22,7 +22,9 @@ use std.env.all;
 entity coremark_tb is
   generic (
     -- Simulated time after which the run fails: far longer than CoreMark
-    -- needs, so that a hung CPU stops the test instead of the timer.
+    -- needs, so that a CPU that never finishes ends with a failure. A slow
+    -- simulator may reach Bazel's test timeout first; either way the run
+    -- fails and records no timings.
     TIMEOUT : time := 2 sec
   );
 end entity;

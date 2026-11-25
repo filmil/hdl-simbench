@@ -66,18 +66,19 @@ def coremark_image(name, iterations):
         name = name + "_elf",
         srcs = [
             ":bench_exit.c",
+            ":core_portme_c",
             ":core_portme_h",
             "//third_party/coremark:hdrs",
             "//third_party/coremark:srcs",
-            "//third_party/neorv32:coremark_port",
             "//third_party/neorv32:sw/common/crt0.S",
             "//third_party/neorv32:sw/common/neorv32.ld",
             "//third_party/neorv32:sw_lib_hdrs",
             "//third_party/neorv32:sw_lib_srcs",
         ],
         outs = [name + ".elf"],
-        # The patched core_portme.h comes first on the include path, so it
-        # wins over the unchanged one next to core_portme.c.
+        # Only the patched core_portme.h is an input, beside the copy of
+        # core_portme.c (//bench/vhdl:core_portme_c), so every include of it
+        # finds that one.
         cmd = " ".join([
             "$(execpath @riscv_gcc//:bin/riscv-none-elf-gcc)",
         ] + _CC_FLAGS + defines + [
@@ -85,12 +86,11 @@ def coremark_image(name, iterations):
             "-I$$(dirname $(execpath :core_portme_h))",
             "-Ithird_party/coremark",
             "-Ithird_party/neorv32/sw/lib/include",
-            "-Ithird_party/neorv32/sw/example/coremark",
         ] + _LD_FLAGS + [
             "-T $(execpath //third_party/neorv32:sw/common/neorv32.ld)",
             "$(execpath //third_party/neorv32:sw/common/crt0.S)",
             "$(execpaths //third_party/coremark:srcs)",
-            "third_party/neorv32/sw/example/coremark/core_portme.c",
+            "$(execpath :core_portme_c)",
             "$(execpaths //third_party/neorv32:sw_lib_srcs)",
             "$(execpath :bench_exit.c)",
         ] + _LD_LIBS + [
@@ -100,6 +100,10 @@ def coremark_image(name, iterations):
             "@riscv_gcc//:all",
             "@riscv_gcc//:bin/riscv-none-elf-gcc",
         ],
+        # The xPack compiler runs on Linux x86-64; what it makes is RISC-V.
+        # The target constraint keeps a wildcard build elsewhere from failing
+        # to find an execution platform; the cases only run there anyway.
+        exec_compatible_with = _LINUX_X86_64,
         target_compatible_with = _LINUX_X86_64,
     )
 
@@ -112,6 +116,10 @@ def coremark_image(name, iterations):
             "@riscv_gcc//:all",
             "@riscv_gcc//:bin/riscv-none-elf-objcopy",
         ],
+        # The xPack compiler runs on Linux x86-64; what it makes is RISC-V.
+        # The target constraint keeps a wildcard build elsewhere from failing
+        # to find an execution platform; the cases only run there anyway.
+        exec_compatible_with = _LINUX_X86_64,
         target_compatible_with = _LINUX_X86_64,
     )
 
