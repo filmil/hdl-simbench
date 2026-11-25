@@ -9,6 +9,7 @@ load(":coremark.bzl", "coremark_image")
 
 exports_files([
     "coremark_tb.vhd",
+    "nvc.BUILD.bazel",
     "riscv_gcc.BUILD.bazel",
     "vhdl_case.sh",
 ])
@@ -104,6 +105,50 @@ sh_test(
         ":coremark_tb.vhd",
         "@ghdl//:ghdl_mcode",
         "@ghdl//:vhdl_libs_v08",
+        "@llvm_toolchain_llvm//:bin/llvm-readelf",
+    ] + ["//third_party/neorv32:" + f for f in NEORV32_RTL],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# The same case under NVC 1.22.0 with its LLVM code generator, the attested
+# release binary (see MODULE.bazel). Linux x86-64 only, like the binary.
+sh_test(
+    name = "coremark_nvc_test",
+    size = "large",
+    srcs = ["vhdl_case.sh"],
+    args = [
+        "--sim",
+        "nvc",
+        "--tool",
+        "$(rootpath @nvc_linux_x86_64//:bin/nvc)",
+        "--top",
+        "coremark_tb",
+        "--readelf",
+        "$(rootpath @llvm_toolchain_llvm//:bin/llvm-readelf)",
+    ] + _COREMARK_1_CHECKS + [
+        # do not sort: the files are analysed in this order.
+        "--",
+        # The program's image is a package that neorv32_imem uses, so it is
+        # analysed into library neorv32 before the processor.
+        "@lib=neorv32",
+        "$(rootpath :coremark_1_imem_image)",
+    ] + [
+        "$(rootpath //third_party/neorv32:%s)" % f
+        for f in NEORV32_RTL
+    ] + [
+        "@lib=work",
+        "$(rootpath :coremark_tb.vhd)",
+        "@nvc-libs",
+        "$(rootpaths @nvc_linux_x86_64//:std)",
+    ],
+    data = [
+        ":coremark_1_imem_image",
+        ":coremark_tb.vhd",
+        "@nvc_linux_x86_64//:bin/nvc",
+        "@nvc_linux_x86_64//:std",
         "@llvm_toolchain_llvm//:bin/llvm-readelf",
     ] + ["//third_party/neorv32:" + f for f in NEORV32_RTL],
     target_compatible_with = [

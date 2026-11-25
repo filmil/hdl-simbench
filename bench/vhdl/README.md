@@ -69,9 +69,26 @@ built from source, and the bench does not use it.
 
 ### NVC
 
-Pending an attested binary (filmil/bazel_toolchains_nvc PR 2). Its flags go
-here, with the optimization level of its elaboration step written out, once
-it runs.
+| | |
+|---|---|
+| Build | NVC 1.22.0 (commit 324ed157), LLVM 18.1.8 code generator, from filmil/bazel_toolchains_nvc release `nvc-1.22.0-324ed157-r2`, built by its release workflow in Ubuntu 20.04, attestation checked before pinning; fetched by sha256 (the same pin as bazel_toolchains_nvc 0.2.0) |
+| Analysis | `nvc --std=2008 -L <std libs> --work=<library>:lib/<library> -L lib -a <files>` |
+| Elaboration | `nvc --std=2008 -L <std libs> --work=work:lib/work -L lib -e -O2 coremark_tb` |
+| Run | `nvc --std=2008 -L <std libs> --work=work:lib/work -L lib -r coremark_tb --ieee-warnings=off --exit-severity=error` |
+
+`-e` without `--jit` is NVC's ahead-of-time elaboration, with LLVM code
+generation at `-O2`, its default level, written out. How much of the code
+generation NVC defers to `-r` is to be checked with its own statistics
+before the numbers are published; until then, compare the sum of
+"compile" and "run".
+The run options are the closest NVC has to GHDL's: `--ieee-warnings=off`
+silences warnings from the IEEE libraries (GHDL's `--ieee-asserts=disable`
+silences all of their assertions; an IEEE library error still stops NVC),
+and `--exit-severity=error` stops on an error, as GHDL's
+`--assert-level=error` does. Linux x86-64 only, like the binary. The
+tarball has no shared libraries for NVC to load, so `--readelf` on the
+binary covers what it takes from the host. The standard libraries are the ones that came
+with the binary, compiled by it.
 
 ## Comparing the numbers
 

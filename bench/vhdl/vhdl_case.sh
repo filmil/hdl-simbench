@@ -35,7 +35,7 @@
 #       [--commands <file>] [--readelf <llvm-readelf>]
 #       [--allow-host-lib <soname>]...
 #       -- [@lib=<library>] <file>... [@lib=<library> <file>...]...
-#          [@ghdl-libs <file>...]
+#          [@ghdl-libs <file>...] [@nvc-libs <file>...]
 #
 # With --readelf, the simulator binary may take nothing from the host but
 # glibc 2.31 or older, and the libraries --allow-host-lib names, as in
@@ -44,7 +44,11 @@
 # The files after -- are analysed in the order given, each into the library
 # the last @lib= names (work before any). The files after @ghdl-libs are
 # GHDL's compiled std and ieee libraries (@ghdl//:vhdl_libs_v08); GHDL's
-# prefix is the directory that holds their std/v08 and ieee/v08. Markers
+# prefix is the directory that holds their std/v08 and ieee/v08. The
+# files after @nvc-libs are NVC's compiled standard libraries
+# (@nvc_linux_x86_64//:std); their directory, the one that holds
+# std.08/_NVC_LIB, goes to NVC with -L. The library markers come last:
+# every file after them belongs to the libraries. Markers
 # instead of flags let a Bazel $(rootpaths) expansion, which becomes one
 # argument per file, follow a marker.
 #
@@ -54,7 +58,7 @@
 
 set -euo pipefail
 
-sim="" tool="" prefix="" top="" timing="" commands="" readelf=""
+sim="" tool="" prefix="" nvclibs="" top="" timing="" commands="" readelf=""
 expects=() rejects=() allowed=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -79,8 +83,12 @@ for a in "$@"; do
   case "$a" in
     @lib=*) lib="${a#@lib=}"; mode=src ;;
     @ghdl-libs) mode=ghdl ;;
+    @nvc-libs) mode=nvc ;;
     *)
-      if [[ $mode == ghdl ]]; then
+      if [[ $mode == nvc ]]; then
+        # .../<dir>/std.08/_NVC_LIB -> <dir>
+        if [[ "$a" == */std.08/_NVC_LIB ]]; then nvclibs="$(abs "${a%/std.08/_NVC_LIB}")"; fi
+      elif [[ $mode == ghdl ]]; then
         # .../<prefix>/std/v08/std-obj08.cf -> <prefix>
         if [[ "$a" == */std/v08/std-obj08.cf ]]; then prefix="$(abs "${a%/std/v08/std-obj08.cf}")"; fi
       else
@@ -210,7 +218,8 @@ case "$sim" in
     run=("$tool" -r "${common[@]}" "$top" --max-stack-alloc=0 --ieee-asserts=disable --assert-level=error)
     ;;
   nvc)
-    common=(--std=2008)
+    if [[ -z "$nvclibs" || ! -d "$nvclibs" ]]; then echo "nvc needs @nvc-libs with std.08/_NVC_LIB" >&2; exit 2; fi
+    common=(--std=2008 -L "$nvclibs")
     mkdir lib
     for g in "${groups[@]}"; do
       l="${g%%$'\t'*}"
