@@ -76,8 +76,11 @@ built from source, and the bench does not use it.
 | Elaboration | `nvc --std=2008 -L <std libs> --work=work:lib/work -L lib -e -O2 coremark_tb` |
 | Run | `nvc --std=2008 -L <std libs> --work=work:lib/work -L lib -r coremark_tb --ieee-warnings=off --exit-severity=error` |
 
-NVC compiles the design to machine code with LLVM during elaboration, so
-that time counts as "compile". `-O2` is NVC's default level, written out.
+`-e` without `--jit` is NVC's ahead-of-time elaboration, with LLVM code
+generation at `-O2`, its default level, written out. How much of the code
+generation NVC defers to `-r` is to be checked with its own statistics
+before the numbers are published; until then, compare the sum of
+"compile" and "run".
 The run options turn off IEEE library warnings, as GHDL's
 `--ieee-asserts=disable` does, and stop on an error, as GHDL's
 `--assert-level=error` does. The standard libraries are the ones that came
