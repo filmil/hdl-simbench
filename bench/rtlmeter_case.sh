@@ -32,12 +32,14 @@
 #                    cycle check and no post hook)
 #       [--cycle-tolerance 1] (also pass with one cycle fewer; see below)
 #       [--timing <file>] [--commands <file>]
+#       [--readelf <llvm-readelf>] (checks the simulator's binaries: see
+#                   check_elf)
 #       -- <source files>...
 
 set -euo pipefail
 
 sim="" tool="" tool2="" vroot="" ivlbase="" top="" cycles="" timing="" posthook="" smoke="" tolerance=0
-commands=""
+commands="" readelf=""
 clangxx="" sysrootfile=""
 defines=() params=() vargs=() plusargs=() expects=() includes=() files=() cpps=()
 while [[ $# -gt 0 ]]; do
@@ -65,6 +67,7 @@ while [[ $# -gt 0 ]]; do
     --sysroot-file) sysrootfile="$2"; shift 2 ;;
     --timing) timing="$2"; shift 2 ;;
     --commands) commands="$2"; shift 2 ;;
+    --readelf) readelf="$2"; shift 2 ;;
     --) shift; break ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -82,6 +85,7 @@ tool="$(abs "$tool")"
 [[ -n "$ivlbase" ]] && ivlbase="$(abs "$ivlbase")"
 [[ -n "$timing" ]] && timing="$(abs "$timing")"
 [[ -n "$commands" ]] && commands="$(abs "$commands")"
+[[ -n "$readelf" ]] && readelf="$(abs "$readelf")"
 # $SIMBENCH_MAX_CYCLES, set by //bench:timed_runs for throughput runs, caps
 # every simulator at the same number of cycles with RTLMeter's +max_cycles.
 # As in a smoke test, a capped run skips the cycle check and the post hook.
@@ -138,6 +142,31 @@ log_command() {
   [[ -n "$commands" ]] || return 0
   { printf '%s' "$1"; shift; printf ' %q' "$@"; printf '\n'; } >> "$commands"
 }
+# The binaries a run times must take nothing from the host but glibc, and no
+# glibc newer than the sysroot's 2.31: no libstdc++, libc++, libgcc_s or
+# libunwind among their NEEDED libraries. check_elf records each binary's
+# NEEDED list, the newest GLIBC symbol version it needs, and the host's ldd
+# output (steps "elf" and "ldd"), and fails the case if a binary breaks the
+# rule.
+check_elf() {
+  [[ -n "$readelf" ]] || return 0
+  local bin="$1" needed glibc bad
+  needed="$("$readelf" -d "$bin" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' | tr '\n' ' ')"
+  glibc="$("$readelf" -V "$bin" | grep -o 'GLIBC_[0-9][0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)"
+  log_command elf "$bin" "NEEDED: ${needed% }" "GLIBC: ${glibc:-none}"
+  if command -v ldd > /dev/null; then
+    ldd "$bin" 2>&1 | while IFS= read -r l; do log_command ldd "$bin" "$l"; done
+  fi
+  bad="$(tr ' ' '\n' <<<"$needed" | grep -E '^lib(stdc\+\+|c\+\+|c\+\+abi|gcc_s|unwind)\.so' || true)"
+  if [[ -n "$bad" ]]; then
+    echo "FAIL: $bin needs a C++ or GCC runtime from the host: $bad" >&2
+    exit 1
+  fi
+  if [[ -n "$glibc" && "$(printf '%s\n2.31\n' "$glibc" | sort -V | tail -1)" != 2.31 ]]; then
+    echo "FAIL: $bin needs glibc $glibc, newer than the sysroot's 2.31" >&2
+    exit 1
+  fi
+}
 now() { date +%s.%N; }
 measure() {
   local step="$1"; shift
@@ -158,8 +187,8 @@ measure() {
 
 # The C++ compiler: the hermetic clang with its sysroot when given, as small
 # wrappers that Verilator's build and xezim's DPI-C build both call (CXX, CC).
-# The C++ library is the sysroot's libstdc++ (GCC 10) headers, as for the
-# whole build; at run time, the host's libstdc++.so.6. Without --clangxx, the host's c++.
+# The C++ library is LLVM's libc++, linked statically, as for the whole
+# build: a built model needs only glibc from the machine it runs on. Without --clangxx, the host's c++.
 cxxflags=(-std=c++20 -O2)
 cxxlibs=(-pthread)
 if [[ -n "$clangxx" ]]; then
@@ -167,12 +196,20 @@ if [[ -n "$clangxx" ]]; then
   # <sysroot>/usr/include/stdio.h
   sysroot="$(dirname "$(dirname "$(dirname "$sysrootfile")")")"
   clang="$(dirname "$clangxx")/clang"
-  printf '#!/bin/sh\nexec "%s" --sysroot="%s" -stdlib=libstdc++ -fuse-ld=lld -Wno-unused-command-line-argument "$@"\n' \
-    "$clangxx" "$sysroot" > "$work/cxx"
-  printf '#!/bin/sh\nexec "%s" --sysroot="%s" -fuse-ld=lld -Wno-unused-command-line-argument "$@"\n' "$clang" "$sysroot" > "$work/cc"
+  llvmlib="$(dirname "$(dirname "$clangxx")")/lib/x86_64-unknown-linux-gnu"
+  # As the Bazel toolchain links C++: libc++, libc++abi, libunwind and
+  # compiler-rt, all static, so only glibc comes from the host.
+  cxx=("$clangxx" --sysroot="$sysroot" -stdlib=libc++ -fuse-ld=lld
+       -Wno-unused-command-line-argument)
+  cxxlink=(-nostdlib++ -rtlib=compiler-rt --unwindlib=none -L"$llvmlib"
+           -l:libc++.a -l:libc++abi.a -l:libunwind.a)
+  cc=("$clang" --sysroot="$sysroot" -fuse-ld=lld -rtlib=compiler-rt
+      --unwindlib=none -Wno-unused-command-line-argument)
+  { printf '#!/bin/sh\nexec'; printf ' %q' "${cxx[@]}"; printf ' "$@"'; printf ' %q' "${cxxlink[@]}"; printf '\n'; } > "$work/cxx"
+  { printf '#!/bin/sh\nexec'; printf ' %q' "${cc[@]}"; printf ' "$@"\n'; } > "$work/cc"
   chmod +x "$work/cxx" "$work/cc"
-  log_command cxx "$clangxx" --sysroot="$sysroot" -stdlib=libstdc++ -fuse-ld=lld -Wno-unused-command-line-argument "<args>"
-  log_command cc "$clang" --sysroot="$sysroot" -fuse-ld=lld -Wno-unused-command-line-argument "<args>"
+  log_command cxx "${cxx[@]}" "<args>" "${cxxlink[@]}"
+  log_command cc "${cc[@]}" "<args>"
   export CXX="$work/cxx" CC="$work/cc"
 else
   # GCC needs these; clang turns coroutines on with -std=c++20 and inlines
@@ -252,6 +289,12 @@ case "$sim" in
     exit 2
     ;;
 esac
+
+# The simulator's own binaries, and the model a Verilator case built.
+check_elf "$tool"
+[[ -n "$tool2" ]] && check_elf "$tool2"
+[[ -n "$ivlbase" && -f "$ivlbase/ivl" ]] && check_elf "$ivlbase/ivl"
+[[ "$sim" == verilator ]] && check_elf "$work/obj/sim"
 
 cd "$work/run"
 status=0

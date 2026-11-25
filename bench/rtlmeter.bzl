@@ -27,6 +27,8 @@ _CXX_ARGS = [
     "$(rootpath @llvm_toolchain_llvm//:bin/clang++)",
     "--sysroot-file",
     "$(rootpath @sysroot_linux_x86_64//:usr/include/stdio.h)",
+    "--readelf",
+    "$(rootpath @llvm_toolchain_llvm//:bin/llvm-readelf)",
 ]
 
 _CXX_DATA = [
@@ -37,6 +39,7 @@ _CXX_DATA = [
     "@llvm_toolchain_llvm//:lib",
     "@sysroot_linux_x86_64//:sysroot",
     "@sysroot_linux_x86_64//:usr/include/stdio.h",
+    "@llvm_toolchain_llvm//:bin/llvm-readelf",
 ]
 
 _SIMULATORS = {
@@ -89,11 +92,14 @@ _SIMULATORS = {
             "$(rootpath @iverilog//:vvp)",
             "--ivl-base",
             "$(rootpath @iverilog//:ivl_base)",
+            "--readelf",
+            "$(rootpath @llvm_toolchain_llvm//:bin/llvm-readelf)",
         ],
         data = [
             "@iverilog",
             "@iverilog//:ivl_base",
             "@iverilog//:vvp",
+            "@llvm_toolchain_llvm//:bin/llvm-readelf",
         ],
         # Icarus has no $root (see //bench:harness_noroot).
         harness = "//bench:harness_noroot",

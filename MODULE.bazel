@@ -89,12 +89,11 @@ llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
 llvm.toolchain(
     name = "llvm_toolchain",
     llvm_version = "23.1.5",
-    # The sysroot's libstdc++ (GCC 10), not LLVM's libc++: the C++ modules
-    # this build compiles (bison, rules_cc_autoconf, ...) are written and
-    # tested against libstdc++, and some rely on headers it includes by the
-    # way. The runtime is the host's libstdc++.so.6, which every target
-    # machine has (eph2: 6.0.33).
-    stdlib = {"": "stdc++"},
+    # The C++ library is LLVM's libc++, with libc++abi, libunwind and
+    # compiler-rt, all linked statically (the module's default,
+    # "builtin-libc++"), so a built binary needs only glibc from the host.
+    # The sysroot has no static libstdc++. Some modules rely on headers that
+    # libstdc++ includes by the way; .bazelrc adds those.
 )
 llvm.sysroot(
     name = "llvm_toolchain",

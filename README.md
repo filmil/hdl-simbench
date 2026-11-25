@@ -12,8 +12,14 @@ Work in progress; see https://github.com/filmil/hdl-simbench/issues/1.
 - VHDL: GHDL, NVC.
 
 All C and C++ is compiled by one hermetic compiler: clang 23.1.5 with
-Chromium's Debian bullseye sysroot (glibc 2.31, and GCC 10's libstdc++ as
-the C++ library), registered for the whole build. It builds Verilator and Icarus, and compiles the C++ model Verilator
+Chromium's Debian bullseye sysroot (glibc 2.31), registered for the whole
+build. The C++ library is LLVM's libc++ with libc++abi, libunwind and
+compiler-rt, all linked statically, so every simulator binary and every
+Verilator model needs only glibc from the host, and no newer glibc than
+2.31. Each case checks that of the binaries it runs (`check_elf` in
+`bench/rtlmeter_case.sh`: no libstdc++, libc++, libgcc_s or libunwind
+among their NEEDED libraries) and records their NEEDED lists and the
+host's `ldd` output with its command lines. It builds Verilator and Icarus, and compiles the C++ model Verilator
 writes for each case and DPI-C sources. xezim's module builds xezim's C code
 and link with its own copy of the same LLVM release and sysroot. The bench
 needs no compiler on the machine it runs on.
@@ -96,8 +102,14 @@ Verilator's model and DPI-C sources, through wrappers recorded as steps
 
 | | |
 |---|---|
-| C++ | `clang++ --sysroot=<sysroot> -stdlib=libstdc++ -fuse-ld=lld -Wno-unused-command-line-argument` |
-| C | `clang --sysroot=<sysroot> -fuse-ld=lld -Wno-unused-command-line-argument` |
+| C++ | `clang++ --sysroot=<sysroot> -stdlib=libc++ -fuse-ld=lld -Wno-unused-command-line-argument <args> -nostdlib++ -rtlib=compiler-rt --unwindlib=none -L<llvm>/lib/x86_64-unknown-linux-gnu -l:libc++.a -l:libc++abi.a -l:libunwind.a` |
+| C | `clang --sysroot=<sysroot> -fuse-ld=lld -rtlib=compiler-rt --unwindlib=none -Wno-unused-command-line-argument` |
+
+The simulators themselves are built by the same toolchain. Some of the
+modules they need rely on headers that libstdc++ includes by the way and
+libc++ does not, so `.bazelrc` adds `-include` of `cstdlib`, `cstring`,
+`iterator` and `algorithm` to every C++ compile of the build. That does not
+reach the Verilator models, which the wrapper above compiles.
 
 ### Verilator
 
