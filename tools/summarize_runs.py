@@ -83,6 +83,10 @@ def summarize(rows):
             c[name + "_max"] = max(vals)
         c["cycles"] = kept[0].get("cycles", "")
         c["resolution_limited"] = c["run_s"] < RESOLUTION_MIN_RUN_S
+        # A run the timer measured as 0 s has no rate at all: not 0 cycles/s.
+        if any(_f(r, "run_wall_s") <= 0 for r in kept):
+            for k in ("cycles_per_s", "cycles_per_s_min", "cycles_per_s_max"):
+                c[k] = None
         commits = sorted({r.get("git_commit", "") for r in kept})
         c["git_commit"] = " ".join(x[:7] for x in commits)
         out.append(c)
@@ -103,7 +107,9 @@ def markdown(cells):
     for c in cells:
         state = c["state"]
         mcps = ""
-        if state == "ok":
+        if state == "ok" and c["cycles_per_s"] is None:
+            mcps = "n/a (resolution-limited)"
+        elif state == "ok":
             mcps = "%.4g [%.4g-%.4g]" % (c["cycles_per_s"], c["cycles_per_s_min"], c["cycles_per_s_max"])
             if c["resolution_limited"]:
                 mcps += " (resolution-limited)"

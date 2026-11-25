@@ -62,6 +62,14 @@ class SummarizeTest(unittest.TestCase):
         self.assertFalse(s.summarize([row(run="1.0")] * 3)[0]["resolution_limited"])
         self.assertIn("resolution-limited", s.markdown(s.summarize([row(run="0.1")] * 3)))
 
+    def test_zero_duration_run_has_no_rate(self):
+        # Servant qerv hello on eph2: 16,560 cycles in "0.00" s.
+        cells = s.summarize([row(run="0.00", cps="")] * 2 + [row(run="0.01", cps="1656000")])
+        self.assertIsNone(cells[0]["cycles_per_s"])
+        md = s.markdown(cells)
+        self.assertIn("n/a (resolution-limited)", md)
+        self.assertNotIn("| 0 [0-0]", md)
+
     def test_markdown(self):
         md = s.markdown(s.summarize([row(), row(), row()]))
         self.assertIn("| verilator 1 | Example | kind_hello | - |", md)
