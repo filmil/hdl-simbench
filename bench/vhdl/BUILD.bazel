@@ -51,7 +51,7 @@ _COREMARK_CHECKS = [
 ]
 
 sh_test(
-    name = "ghdl_coremark_test",
+    name = "coremark_ghdl_test",
     size = "large",
     srcs = ["vhdl_case.sh"],
     args = [

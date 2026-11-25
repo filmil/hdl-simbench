@@ -60,7 +60,7 @@ use_repo(pip, "pypi")
 bazel_dep(name = "ghdl", version = "6.0.0.bcr.5")
 
 # C, for NEORV32's image_gen tool.
-bazel_dep(name = "rules_cc", version = "0.2.19")
+bazel_dep(name = "rules_cc", version = "0.2.28")
 
 # The RISC-V GCC that builds the programs NEORV32 runs (CoreMark). It is the
 # xPack build of GCC 15.2.0 with newlib, as NEORV32's own makefiles expect
