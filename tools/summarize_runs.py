@@ -97,14 +97,14 @@ def _cell(c, name, fmt):
 
 def markdown(cells):
     lines = [
-        "| simulator | design | case | cap | cycles | kept/runs | compile s | run s | total s | M cycles/s | commit |",
+        "| simulator | design | case | cap | cycles | kept/runs | compile s | run s | total s | cycles/s | commit |",
         "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for c in cells:
         state = c["state"]
         mcps = ""
         if state == "ok":
-            mcps = "%.3f [%.3f-%.3f]" % (c["cycles_per_s"] / 1e6, c["cycles_per_s_min"] / 1e6, c["cycles_per_s_max"] / 1e6)
+            mcps = "%.4g [%.4g-%.4g]" % (c["cycles_per_s"], c["cycles_per_s_min"], c["cycles_per_s_max"])
             if c["resolution_limited"]:
                 mcps += " (resolution-limited)"
         lines.append("| %s %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (
