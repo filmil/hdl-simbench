@@ -182,7 +182,9 @@ for target in "${targets[@]}"; do
     --test_output=errors
   )
   [[ -n "$max_cycles" ]] && test_opts+=(--test_env=SIMBENCH_MAX_CYCLES="$max_cycles")
-  "$bazel" test "${bazel_args[@]}" "${test_opts[@]}" --build_only "$target" >&2
+  # "bazel build" with the runs' build option (--run_under); the test-only
+  # options do not affect what is built.
+  "$bazel" build "${bazel_args[@]}" --run_under="taskset -c $core" "$target" >&2
   for ((r = 1; r <= repeats; r++)); do
     free_gb="$(df -P -BG "$outbase" | awk 'NR == 2 { sub("G", "", $4); print $4 }')"
     if ((free_gb < min_free_gb)); then
