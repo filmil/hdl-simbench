@@ -66,7 +66,9 @@ begin
     wait until gpio(0) = '1';
     report "coremark_tb: program done at " & time'image(now);
     -- Clock cycles simulated, for the bench's cycles-per-second figure
-    -- (vhdl_case.sh reads this line).
+    -- (vhdl_case.sh reads this line). integer limits it to 2**31 - 1
+    -- cycles, 21 s of simulated time, about 2000 CoreMark iterations; the
+    -- simulator stops with an error beyond that, it does not wrap.
     report "simbench cycles " & integer'image(now / CLOCK_PERIOD);
     finish;
   end process;

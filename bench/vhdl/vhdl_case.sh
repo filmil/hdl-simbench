@@ -10,9 +10,11 @@
 # <file>, one line per step is appended to it,
 #   <step> <wall s> <user s> <system s> <max RSS KiB>
 # summed over the step's commands (RSS: the largest), measured by
-# /usr/bin/time, or "<step> <wall s>" alone without it; then "cycles <n>",
-# the clock cycles the design simulated, from the testbench's line
-# "simbench cycles <n>".
+# GNU time as /usr/bin/time, or "<step> <wall s>" alone without it; then
+# "cycles <n>", the clock cycles the design simulated.
+#
+# The testbench must print "simbench cycles <n>" (n > 0) when it ends, with
+# or without --timing: a run without that line fails.
 #
 #   compile  GHDL: analysis of every file. NVC: analysis and elaboration,
 #            where NVC generates the design's machine code.
@@ -111,13 +113,17 @@ log_command() {
   [[ -n "$commands" ]] || return 0
   { printf '%s' "$1"; shift; printf ' %q' "$@"; printf '\n'; } >> "$commands"
 }
+# GNU time's -f, -a and -o; another /usr/bin/time (BusyBox) takes the
+# fallback.
+gnu_time=0
+if [[ -x /usr/bin/time ]] && /usr/bin/time -f %e -a -o /dev/null true 2> /dev/null; then gnu_time=1; fi
 # step: runs the command after the step name, records it, and appends its
 # measurement, "<step> <wall> <user> <system> <max RSS>", to steps.txt.
 # The timing file gets the sums only once the run has passed.
 step() {
   local name="$1" st=0 t0 t1; shift
   log_command "$name" "$@"
-  if [[ -x /usr/bin/time ]]; then
+  if [[ $gnu_time == 1 ]]; then
     /usr/bin/time -f "$name %e %U %S %M" -a -o "$work/steps.txt" "$@" || st=$?
   else
     t0="$(now)"
@@ -132,8 +138,15 @@ glibc_libs=" libc.so.6 libm.so.6 libpthread.so.0 libdl.so.2 librt.so.1 libutil.s
 check_elf() {
   [[ -n "$readelf" ]] || return 0
   local bin="$1" needed glibc bad="" n a path sum
-  needed="$("$readelf" -d "$bin" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' | tr '\n' ' ' || true)"
-  glibc="$("$readelf" -V "$bin" | { grep -o 'GLIBC_[0-9][0-9.]*' || true; } | sed 's/GLIBC_//' | sort -V | tail -1)"
+  local dyn ver odd
+  dyn="$("$readelf" -d "$bin")" || { echo "FAIL: $readelf -d $bin failed" >&2; exit 1; }
+  ver="$("$readelf" -V "$bin")" || { echo "FAIL: $readelf -V $bin failed" >&2; exit 1; }
+  needed="$(sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' <<< "$dyn" | tr '\n' ' ')"
+  glibc="$({ grep -o 'GLIBC_[0-9][0-9.]*' <<< "$ver" || true; } | sed 's/GLIBC_//' | sort -V | tail -1)"
+  # Symbol versions that are not a release number (GLIBC_PRIVATE,
+  # GLIBC_ABI_DT_RELR from glibc 2.36) tie a binary to a newer or a
+  # particular glibc.
+  odd="$({ grep -o 'GLIBC_[A-Za-z0-9_.]*' <<< "$ver" || true; } | { grep -v '^GLIBC_[0-9][0-9.]*$' || true; } | sort -u | tr '\n' ' ')"
   log_command elf "$bin" "NEEDED: ${needed% }" "GLIBC: ${glibc:-none}"
   if command -v ldd > /dev/null; then
     { ldd "$bin" 2>&1 || true; } | while IFS= read -r l; do log_command ldd "$bin" "$l"; done
@@ -151,6 +164,10 @@ check_elf() {
     done
     bad+=" $n"
   done
+  if [[ -n "$odd" ]]; then
+    echo "FAIL: $bin needs glibc symbol versions tied to a newer or particular glibc: ${odd% }" >&2
+    exit 1
+  fi
   if [[ -n "$bad" ]]; then
     echo "FAIL: $bin needs libraries from the host other than glibc's:$bad" >&2
     exit 1
@@ -222,9 +239,9 @@ for r in "${rejects[@]}"; do
     exit 1
   fi
 done
-cycles="$(sed -n 's/.*simbench cycles \([0-9][0-9]*\).*/\1/p' stdout.log | tail -1)"
+cycles="$(sed -n -E 's/.*simbench cycles ([1-9][0-9]*)([^0-9.A-Za-z_]|$).*/\1/p' stdout.log | tail -1)"
 if [[ -z "$cycles" ]]; then
-  echo "FAIL: $sim output lacks the testbench's \"simbench cycles <n>\" line" >&2
+  echo "FAIL: $sim output lacks the testbench's \"simbench cycles <n>\" line, n > 0" >&2
   exit 1
 fi
 if [[ -n "$timing" ]]; then

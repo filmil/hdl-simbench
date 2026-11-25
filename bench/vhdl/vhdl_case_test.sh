@@ -15,13 +15,16 @@ mkdir -p p/std/v08
 touch p/std/v08/std-obj08.cf a.vhd b.vhd c.vhd
 cat > stub.sh <<'STUB'
 #!/usr/bin/env bash
-case " $* " in *" -r "*) echo "hello OK"; echo "tb.vhd:1:1:(report note): simbench cycles 42" ;; esac
+case " $* " in *" -r "*) echo "hello OK"; echo "tb.vhd:1:1:(report note): simbench cycles ${CYCLES-42}" ;; esac
 STUB
-# A readelf that reports the NEEDED list in $NEEDED.
+# A readelf that reports the NEEDED list in $NEEDED and the symbol
+# versions in $VERSIONS.
 cat > readelf.sh <<'STUB'
 #!/usr/bin/env bash
 if [[ "$1" == -d ]]; then
   for n in $NEEDED; do echo " 0x0000000000000001 (NEEDED) Shared library: [$n]"; done
+elif [[ "$1" == -V ]]; then
+  for v in $VERSIONS; do echo "  0x0010:   Name: $v  Flags: none  Version: 2"; done
 fi
 STUB
 chmod +x readelf.sh
@@ -66,7 +69,29 @@ if NEEDED="libc.so.6 libgcc_s.so.1" bash "$case_sh" --sim ghdl --tool stub.sh \
 fi
 [[ ! -e t6 ]] || fail "a failed host-library check wrote timings"
 NEEDED="libc.so.6 libgcc_s.so.1" bash "$case_sh" --sim ghdl --tool stub.sh --top top \
-  --readelf readelf.sh --allow-host-lib libgcc_s.so.1 "${files[@]}" > /dev/null
+  --readelf readelf.sh --allow-host-lib libgcc_s.so.1 --commands c7 "${files[@]}" > /dev/null
+grep -q "^host-lib $w/stub.sh libgcc_s.so.1 " c7 || { cat c7 >&2; fail "c7 lacks the host-lib record"; }
+
+# glibc symbol versions: 2.31 passes and is recorded; newer, or one tied to
+# a particular glibc, fails.
+NEEDED="libc.so.6" VERSIONS="GLIBC_2.2.5 GLIBC_2.31" bash "$case_sh" --sim ghdl \
+  --tool stub.sh --top top --readelf readelf.sh --commands c8 "${files[@]}" > /dev/null
+want c8 "elf $w/stub.sh NEEDED:\\ libc.so.6 GLIBC:\\ 2.31"
+for v in GLIBC_2.34 GLIBC_PRIVATE GLIBC_ABI_DT_RELR; do
+  if NEEDED="libc.so.6" VERSIONS="GLIBC_2.2.5 $v" bash "$case_sh" --sim ghdl \
+    --tool stub.sh --top top --readelf readelf.sh "${files[@]}" > /dev/null 2>&1; then
+    fail "a binary needing $v passed"
+  fi
+done
+
+# The cycles line is required, and must be a positive whole number.
+for c in "" 0 12.5 12abc; do
+  if CYCLES="$c" bash "$case_sh" --sim ghdl --tool stub.sh --top top \
+    --timing t9 "${files[@]}" > /dev/null 2>&1; then
+    fail "cycles '$c' passed"
+  fi
+  [[ ! -e t9 ]] || fail "cycles '$c' wrote timings"
+done
 
 # A missing expected line or a rejected one fails the case and writes no
 # timings.

@@ -66,8 +66,6 @@ _COREMARK_1_CHECKS = [
     "'[0]crcstate      : 0x8e3a'",
     "--expect",
     "'coremark_tb: program done'",
-    "--expect",
-    "'simbench cycles '",
     "--reject",
     "'crc 0x'",
 ]
