@@ -44,6 +44,13 @@ class ReportTablesTest(unittest.TestCase):
         self.assertIn("more runs needed (1 of 5 runs kept)", cells[4])
         self.assertNotIn("268", cells[4])
 
+    def test_missing_rate_is_na(self):
+        cells = report_tables.cell_row(dict(ROW, cycles_per_s="", resolution_limited="True"))
+        self.assertEqual(cells[9], "n/a$^\\dagger$")
+
+    def test_vhdl_design_is_named(self):
+        self.assertEqual(report_tables.cell_row(ROW)[1], "NEORV32")
+
     def test_large_numbers_use_exponents(self):
         self.assertEqual(report_tables.num("6666666.7", 0), "6.67e+06")
 

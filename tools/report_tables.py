@@ -35,6 +35,11 @@ def tex(s):
     return "".join(out)
 
 
+# Design names as the report shows them: the VHDL case's package is named
+# after the language, its design is NEORV32.
+DESIGN_NAMES = {"vhdl": "NEORV32"}
+
+
 def language(row):
     return "vhdl" if row["design"] == "vhdl" else "sv"
 
@@ -70,13 +75,16 @@ def mib(row):
 def cell_row(row):
     sim = "%s %s" % (row["simulator"], row["simulator_version"])
     cap = row["max_cycles"] or "--"
-    head = [tex(sim), tex(row["design"]), tex(row["case"]), tex(cap)]
+    design = DESIGN_NAMES.get(row["design"], row["design"])
+    head = [tex(sim), tex(design), tex(row["case"]), tex(cap)]
     if row["state"] != "ok":
         return head + [
             "\\multicolumn{7}{l}{%s (%s of %s runs kept)}"
             % (tex(row["state"]), tex(row["kept"]), tex(row["runs"]))
         ]
     rate = rng(row, "cycles_per_s", 0)
+    if rate == "--":
+        rate = "n/a"
     if row["resolution_limited"] == "True":
         rate += "$^\\dagger$"
     return head + [
