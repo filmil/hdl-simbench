@@ -1,5 +1,8 @@
 load("@rules_python//python:py_test.bzl", "py_test")
 
+# The summaries the report (//report) is made from.
+exports_files(glob(["*/summary.csv"]))
+
 # Every published campaign still follows from its per-run files.
 py_test(
     name = "results_test",

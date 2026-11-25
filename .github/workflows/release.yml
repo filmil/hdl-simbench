@@ -1,0 +1,63 @@
+# A release of the study: pushing a tag v<version> builds the report PDF
+# and publishes it with the raw data it was made from.
+#
+# Assets:
+#   hdl-simbench-<tag>.pdf          the report (//report:report)
+#   hdl-simbench-<tag>-results.tar.gz
+#                                   results/: every campaign's per-run CSV
+#                                   files, command records, notes and
+#                                   summaries
+#   SHA256SUMS                      checksums of the two
+#
+# Only this build is stamped with the tag (--define=REPORT_VERSION);
+# every other build says "unreleased" and stays cacheable.
+name: release
+
+on:
+  push:
+    tags: ["v[0-9]*"]
+
+permissions:
+  contents: write
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: bazel-contrib/setup-bazel@4fd964a13a440a8aeb0be47350db2fc640f19ca8 # 0.15.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+
+      # The release must come from data that still follows from its
+      # per-run files.
+      - name: Check the results
+        run: bazel test --lockfile_mode=error //results:results_test //tools:report_tables_test
+
+      - name: Build the report
+        run: bazel build --lockfile_mode=error --define=REPORT_VERSION=${{ github.ref_name }} //report:report
+
+      - name: Collect the assets
+        run: |
+          set -o errexit -o nounset -o pipefail
+          tag="${{ github.ref_name }}"
+          mkdir out
+          cp bazel-bin/report/report.pdf "out/hdl-simbench-${tag}.pdf"
+          tar --sort=name --owner=0 --group=0 --numeric-owner \
+            --mtime="$(git log -1 --format=%cI)" \
+            -czf "out/hdl-simbench-${tag}-results.tar.gz" results
+          (cd out && sha256sum * > SHA256SUMS)
+          cat out/SHA256SUMS
+
+      - name: Publish the release
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
+        with:
+          tag: ${{ github.ref_name }}
+          artifacts: "out/*"
+          body: |
+            The hdl-simbench report for ${{ github.ref_name }}, with the raw
+            data it was made from: every campaign's per-run CSV files, the
+            command line of every simulator run, the campaign notes and
+            summaries. SHA256SUMS lists the checksums of both files.

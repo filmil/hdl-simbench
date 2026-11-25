@@ -160,6 +160,18 @@ http_archive(
     urls = ["https://github.com/filmil/bazel_toolchains_nvc/releases/download/nvc-1.22.0-324ed157-r2/nvc-1.22.0-324ed157-r2-linux-x86_64.tar.gz"],
 )
 
+# LaTeX for the report (//report), hermetic: rules_latex_host's
+# hermetic_latex extension fetches a pinned TinyTeX, so nothing is used
+# from the machine. Registered here, so it comes before the module's own
+# toolchain, which wraps the host's pdflatex.
+bazel_dep(name = "rules_latex_host", version = "0.3.1")
+
+hermetic_latex = use_extension("@rules_latex_host//latex:extensions.bzl", "hermetic_latex")
+hermetic_latex.toolchain()
+use_repo(hermetic_latex, "hermetic_latex", "hermetic_latex_ghostscript")
+
+register_toolchains("@hermetic_latex//:all")
+
 # C, for NEORV32's image_gen tool.
 bazel_dep(name = "rules_cc", version = "0.2.28")
 

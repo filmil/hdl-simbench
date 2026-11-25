@@ -24,4 +24,9 @@ build --host_cxxopt=-include --host_cxxopt=iterator --host_cxxopt=-include --hos
 
 test --test_output=errors
 
+# The report's version line (//report:version). The release workflow
+# passes the tag instead; every other build says "unreleased", so that its
+# outputs stay the same from commit to commit and cache.
+build --define=REPORT_VERSION=unreleased
+
 try-import %workspace%/user.bazelrc
