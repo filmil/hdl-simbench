@@ -31,6 +31,9 @@
 # +max_cycles: the throughput runs, the same cap for every simulator.
 # Each run's commands.txt is copied to <out>.commands/, and the row names it.
 #
+# Each row also names the workspace's git commit, whether its tracked files
+# were changed (dirty), and the SHA-256 of MODULE.bazel.lock.
+#
 # It stops before a run if the file system holding the Bazel output base has
 # under --min-free-gb free (default 15).
 set -euo pipefail
@@ -103,6 +106,12 @@ parse_label() {
   return 1
 }
 
+# The CPUs other than $1 and $2, as a taskset list ("0,1,3").
+other_cpus() {
+  awk -v a="$1" -v b="$2" '$1 ~ /^cpu[0-9]+$/ { n = substr($1, 4); if (n != a && n != b) l = l (l == "" ? "" : ",") n }
+    END { print l }' "$PROC_STAT"
+}
+
 # Sourced by the test with TIMED_RUNS_LIB=1: the helpers only.
 [[ -n "${TIMED_RUNS_LIB:-}" ]] && return 0
 
@@ -149,13 +158,44 @@ sibling="$(expand_cpulist < "$SYSFS_CPU/cpu$core/topology/thread_siblings_list" 
   grep -v -x "$core" | head -1 || true)"
 host="$(hostname -s)"
 
+# What was measured: the workspace's commit, whether tracked files differ
+# from it (untracked files such as user.bazelrc do not count), and the
+# lockfile's SHA-256. Every row carries them.
+# Taken again before each run.
+provenance() {
+  local st
+  git_commit="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+  if st="$(git status --porcelain --untracked-files=no 2>/dev/null)"; then
+    if [[ -n "$st" ]]; then git_dirty=dirty; else git_dirty=clean; fi
+  else
+    git_dirty=unknown
+  fi
+  lock_sha256="$(sha256sum MODULE.bazel.lock 2>/dev/null | cut -d' ' -f1)"
+  lock_sha256="${lock_sha256:-unknown}"
+}
+
+header="utc_start,host,simulator,simulator_version,design,case,target,repeat,status,max_cycles,commands_file,cycles,cycles_per_s,verilate_wall_s,verilate_user_s,verilate_sys_s,verilate_maxrss_kib,compile_wall_s,compile_user_s,compile_sys_s,compile_maxrss_kib,run_wall_s,run_user_s,run_sys_s,run_maxrss_kib,core,load1_before,load1_max_during,load1_after,core_busy_pct,sibling_busy_pct,others_busy_pct,steal_pct,git_commit,git_dirty,lock_sha256"
 if [[ ! -s "$out" ]]; then
-  echo "utc_start,host,simulator,simulator_version,design,case,target,repeat,status,max_cycles,commands_file,cycles,cycles_per_s,verilate_wall_s,verilate_user_s,verilate_sys_s,verilate_maxrss_kib,compile_wall_s,compile_user_s,compile_sys_s,compile_maxrss_kib,run_wall_s,run_user_s,run_sys_s,run_maxrss_kib,core,load1_before,load1_max_during,load1_after,core_busy_pct,sibling_busy_pct,others_busy_pct,steal_pct" > "$out"
+  echo "$header" > "$out"
+elif [[ "$(head -1 "$out")" != "$header" ]]; then
+  echo "$out has other columns (an older driver's); write to a new file" >&2
+  exit 2
 fi
 
+# Bazel itself (its client and server, and the work it does between runs)
+# stays off the pinned core and its sibling: every Bazel command runs under
+# taskset on the other CPUs, and the server is restarted first so that it
+# starts with that affinity too. Only the test, through --run_under, moves
+# to the pinned core. Niceness is not lowered, because the test would
+# inherit it from the server.
+others="$(other_cpus "$core" "${sibling:-none}")"
+[[ -n "$others" ]] || { echo "no CPUs left for Bazel besides $core and its sibling" >&2; exit 2; }
+bz() { taskset -c "$others" "$bazel" "$@"; }
+bz shutdown >&2
+
 # Build options only: "bazel info" rejects test options.
-testlogs="$("$bazel" info bazel-testlogs)"
-outbase="$("$bazel" info output_base)"
+testlogs="$(bz info bazel-testlogs)"
+outbase="$(bz info output_base)"
 
 samples="" sampler=""
 cleanup() {
@@ -182,22 +222,28 @@ for target in "${targets[@]}"; do
     --test_output=errors
   )
   [[ -n "$max_cycles" ]] && test_opts+=(--test_env=SIMBENCH_MAX_CYCLES="$max_cycles")
-  "$bazel" test "${bazel_args[@]}" "${test_opts[@]}" --build_only "$target" >&2
+  # "bazel build" accepts the test options too (--test_env, --run_under and
+  # the rest are part of the configuration), so the pre-build uses exactly
+  # the runs' options and the first run does not re-analyze.
+  bz build "${bazel_args[@]}" "${test_opts[@]}" "$target" >&2
   for ((r = 1; r <= repeats; r++)); do
     free_gb="$(df -P -BG "$outbase" | awk 'NR == 2 { sub("G", "", $4); print $4 }')"
     if ((free_gb < min_free_gb)); then
       echo "stop: ${free_gb} GB free under $outbase, under ${min_free_gb} GB" >&2
       exit 1
     fi
+    # Bazel leaves a test's outputs read-only.
+    [[ -d "$outputs" ]] && chmod -R u+w "$outputs"
     rm -f "$outputs/timing.txt" "$outputs/commands.txt"
     samples="$(mktemp)"
     ( while :; do load1 >> "$samples"; sleep 2; done ) &
     sampler=$!
+    provenance
     start="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     l_before="$(load1)"
     before="$(snapshot "$core" "$sibling")"
     status=pass
-    "$bazel" test "${bazel_args[@]}" "${test_opts[@]}" "$target" >&2 || status=fail
+    bz test "${bazel_args[@]}" "${test_opts[@]}" "$target" >&2 || status=fail
     after="$(snapshot "$core" "$sibling")"
     l_after="$(load1)"
     kill "$sampler" 2>/dev/null || true
@@ -231,7 +277,7 @@ for target in "${targets[@]}"; do
     fi
     run_wall="${x%%,*}"
     cps="$(awk -v n="$cycles" -v t="$run_wall" 'BEGIN { if (n ~ /^[0-9]+$/ && t > 0) printf "%.1f", n / t }')"
-    echo "$start,$host,$sim,${version[$sim]:-},$design,$case_,$target,$r,$status,$max_cycles,$cmdfile,$cycles,$cps,$v,$c,$x,$core,$l_before,$l_max,$l_after,$core_pct,$sib_pct,$oth_pct,$steal" >> "$out"
+    echo "$start,$host,$sim,${version[$sim]:-},$design,$case_,$target,$r,$status,$max_cycles,$cmdfile,$cycles,$cps,$v,$c,$x,$core,$l_before,$l_max,$l_after,$core_pct,$sib_pct,$oth_pct,$steal,$git_commit,$git_dirty,$lock_sha256" >> "$out"
     echo "$target run $r: $status, ${run_wall:-?} s run, ${cycles:-?} cycles, load $l_before/$l_max/$l_after" >&2
   done
 done

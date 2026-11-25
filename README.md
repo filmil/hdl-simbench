@@ -1,5 +1,7 @@
 # hdl-simbench
 
+[![CI](https://github.com/filmil/hdl-simbench/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/filmil/hdl-simbench/actions/workflows/ci.yml)
+
 VHDL and SystemVerilog simulators compared on the same designs, under
 comparable conditions, built with Bazel.
 
@@ -73,6 +75,38 @@ bazel build //bench:timed_runs
 bazel-bin/bench/timed_runs --core 2 --repeats 5 --out results.csv \
     //third_party/rtlmeter/designs/Example:kind_hello_verilator_test
 ```
+
+## Which runs count
+
+Fixed on 2026-11-25, before any VeeR-EL2 result was seen, and applied
+unchanged to all data:
+
+- A run is dropped if its CSV row has `sibling_busy_pct` over 25 (the
+  pinned core's hyperthread sibling was busy) or `steal_pct` over 1.
+- A cell is one simulator (and version) on one host running one case of one
+  design at one cycle cap. It reports the median of its kept runs, with
+  their minimum and maximum, of "compile" (for Verilator, its translation
+  plus the C++ compile), "run", and "total": compile plus run of the same
+  run. For short simulations the total decides which simulator is faster.
+- If more than a third of a cell's runs are dropped, the cell gets more
+  runs instead of a median of what is left.
+- Runs that fail are not timed results; a cell with a failing run is
+  reported as failing.
+- A cell whose median run is under 1 s, or with a run of 0 s, has its
+  cycles per second marked "resolution-limited": `/usr/bin/time` counts
+  wall time in 0.01 s steps. With a 0 s run it has no rate at all ("n/a").
+  Its throughput comes from a longer run of the same simulator instead.
+- A cell whose kept runs simulated different cycle counts is reported as
+  "cycles differ", not summarized.
+
+`//tools:summarize_runs` applies these rules to the CSV files of
+`//bench:timed_runs`.
+
+Throughput at a common cycle cap (`timed_runs --max-cycles`) measures the
+first cycles of a program. On VeeR-EL2, the first 10,000 cycles are mostly
+reset and boot, which may run at a different speed from the program's
+steady state. Full-length runs of the same programs, where a simulator
+finishes them in reasonable time, are the steady-state comparison.
 
 ## Flags
 

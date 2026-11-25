@@ -71,5 +71,9 @@ for bad in //a/b //:kind_hello_verilator_test //a/b:foo_test //a/b:_verilator_te
   fi
 done
 
+# The CPUs left for Bazel: all but the pinned core and its sibling.
+check "other cpus" "$(other_cpus 2 3)" "0,1"
+check "other cpus, no sibling" "$(other_cpus 2 none)" "0,1,3"
+
 [[ $fail -eq 0 ]] && echo PASS
 exit $fail
