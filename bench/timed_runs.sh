@@ -22,15 +22,21 @@
 # the pinned core, of its hyperthread sibling (which should be idle), of the
 # other cores, and the CPU steal share of the whole machine.
 #
+# With --max-cycles, every run is capped at that many cycles by RTLMeter's
+# +max_cycles: the throughput runs, the same cap for every simulator.
+# Each run's exact command lines (the runner's commands.txt) are copied to
+# <out>.commands/, and the row names the file.
+#
 # It stops before a run if the file system holding the Bazel output base has
 # under --min-free-gb free (default 15).
 set -euo pipefail
 
-core="" repeats=1 out="" min_free_gb=15 bazel="bazel"
+core="" repeats=1 out="" min_free_gb=15 bazel="bazel" max_cycles=""
 bazel_args=()
 targets=()
 usage() {
   echo "usage: timed_runs --core <n> --out <file.csv> [--repeats <n>] [--min-free-gb <n>]" >&2
+  echo "                  [--max-cycles <n>] (the same +max_cycles cap for every simulator)" >&2
   echo "                  [--bazel <bazel or bazelisk>] [--bazel-arg <arg>]... <test target>..." >&2
   exit 2
 }
@@ -40,6 +46,7 @@ while [[ $# -gt 0 ]]; do
     --repeats) repeats="$2"; shift 2 ;;
     --out) out="$2"; shift 2 ;;
     --min-free-gb) min_free_gb="$2"; shift 2 ;;
+    --max-cycles) max_cycles="$2"; shift 2 ;;
     --bazel) bazel="$2"; shift 2 ;;
     --bazel-arg) bazel_args+=("$2"); shift 2 ;;
     -*) usage ;;
@@ -98,7 +105,7 @@ step() {
 }
 
 if [[ ! -s "$out" ]]; then
-  echo "utc_start,host,simulator,simulator_version,design,case,target,repeat,status,cycles,cycles_per_s,verilate_wall_s,verilate_user_s,verilate_sys_s,verilate_maxrss_kib,compile_wall_s,compile_user_s,compile_sys_s,compile_maxrss_kib,run_wall_s,run_user_s,run_sys_s,run_maxrss_kib,core,load1_before,load1_max_during,load1_after,core_busy_pct,sibling_busy_pct,others_busy_pct,steal_pct" > "$out"
+  echo "utc_start,host,simulator,simulator_version,design,case,target,repeat,status,max_cycles,commands_file,cycles,cycles_per_s,verilate_wall_s,verilate_user_s,verilate_sys_s,verilate_maxrss_kib,compile_wall_s,compile_user_s,compile_sys_s,compile_maxrss_kib,run_wall_s,run_user_s,run_sys_s,run_maxrss_kib,core,load1_before,load1_max_during,load1_after,core_busy_pct,sibling_busy_pct,others_busy_pct,steal_pct" > "$out"
 fi
 
 testlogs="$("$bazel" info "${bazel_args[@]}" bazel-testlogs 2>/dev/null)"
@@ -128,6 +135,7 @@ for target in "${targets[@]}"; do
       --local_test_jobs=1 \
       --nozip_undeclared_test_outputs \
       --run_under="taskset -c $core" \
+      ${max_cycles:+--test_env=SIMBENCH_MAX_CYCLES="$max_cycles"} \
       --test_output=errors \
       "$target" >&2 || status=fail
     after="$(snapshot)"
@@ -152,6 +160,13 @@ for target in "${targets[@]}"; do
     fi
 
     timing="$testlogs/$pkg/$name/test.outputs/timing.txt"
+    # The run's exact command lines, kept beside the CSV, one file per row.
+    cmdfile=""
+    if [[ -f "$testlogs/$pkg/$name/test.outputs/commands.txt" ]]; then
+      mkdir -p "$out.commands"
+      cmdfile="$out.commands/$(date -u +%Y%m%dT%H%M%S)-$name-$r.txt"
+      cp "$testlogs/$pkg/$name/test.outputs/commands.txt" "$cmdfile"
+    fi
     if [[ -f "$timing" ]]; then
       cycles="$(awk '$1 == "cycles" { print $2 }' "$timing")"
       v="$(step verilate "$timing")"
@@ -163,7 +178,7 @@ for target in "${targets[@]}"; do
     fi
     run_wall="${x%%,*}"
     cps="$(awk -v n="$cycles" -v t="$run_wall" 'BEGIN { if (n ~ /^[0-9]+$/ && t > 0) printf "%.1f", n / t }')"
-    echo "$start,$host,$sim,${version[$sim]:-},$design,$case_,$target,$r,$status,$cycles,$cps,$v,$c,$x,$core,$l_before,$l_max,$l_after,$core_pct,$sib_pct,$oth_pct,$steal" >> "$out"
+    echo "$start,$host,$sim,${version[$sim]:-},$design,$case_,$target,$r,$status,$max_cycles,$cmdfile,$cycles,$cps,$v,$c,$x,$core,$l_before,$l_max,$l_after,$core_pct,$sib_pct,$oth_pct,$steal" >> "$out"
     echo "$target run $r: $status, ${run_wall:-?} s run, ${cycles:-?} cycles, load $l_before/$l_max/$l_after" >&2
   done
 done

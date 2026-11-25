@@ -31,12 +31,13 @@
 #       [--smoke]   (a run cut short by +max_cycles: as in RTLMeter, no
 #                    cycle check and no post hook)
 #       [--cycle-tolerance 1] (also pass with one cycle fewer; see below)
-#       [--timing <file>]
+#       [--timing <file>] [--commands <file>]
 #       -- <source files>...
 
 set -euo pipefail
 
 sim="" tool="" tool2="" vroot="" ivlbase="" top="" cycles="" timing="" posthook="" smoke="" tolerance=0
+commands=""
 clangxx="" sysrootfile=""
 defines=() params=() vargs=() plusargs=() expects=() includes=() files=() cpps=()
 while [[ $# -gt 0 ]]; do
@@ -63,6 +64,7 @@ while [[ $# -gt 0 ]]; do
     --clangxx) clangxx="$2"; shift 2 ;;
     --sysroot-file) sysrootfile="$2"; shift 2 ;;
     --timing) timing="$2"; shift 2 ;;
+    --commands) commands="$2"; shift 2 ;;
     --) shift; break ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -79,6 +81,14 @@ tool="$(abs "$tool")"
 [[ -n "$vroot" ]] && vroot="$(abs "$vroot")"
 [[ -n "$ivlbase" ]] && ivlbase="$(abs "$ivlbase")"
 [[ -n "$timing" ]] && timing="$(abs "$timing")"
+[[ -n "$commands" ]] && commands="$(abs "$commands")"
+# $SIMBENCH_MAX_CYCLES, set by //bench:timed_runs for throughput runs, caps
+# every simulator at the same number of cycles with RTLMeter's +max_cycles.
+# As in a smoke test, a capped run skips the cycle check and the post hook.
+if [[ -n "${SIMBENCH_MAX_CYCLES:-}" ]]; then
+  plusargs+=("+max_cycles=${SIMBENCH_MAX_CYCLES}")
+  smoke=1
+fi
 [[ -n "$posthook" ]] && posthook="$(abs "$posthook")"
 cppfiles=()
 for c in "${cpps[@]}"; do cppfiles+=("$(abs "$c")"); done
@@ -117,9 +127,21 @@ incdir="$work/verilogIncludeFiles"
 [[ -z "$timing" && -n "${SIMBENCH_TIMING:-}" ]] && timing="$(abs "$SIMBENCH_TIMING")"
 [[ -z "$timing" && -n "${TEST_UNDECLARED_OUTPUTS_DIR:-}" ]] && timing="$TEST_UNDECLARED_OUTPUTS_DIR/timing.txt"
 [[ -n "$timing" ]] && : > "$timing"
+# Commands. Every command a step runs is appended to the commands file, one
+# line each, "<step> <argv, shell-quoted>", in the format of
+# bench/vhdl/vhdl_case.sh: --commands, else commands.txt next to the
+# timing file under "bazel test". The compiler wrappers' full command lines
+# come first, as steps "cxx" and "cc".
+[[ -z "$commands" && -n "${TEST_UNDECLARED_OUTPUTS_DIR:-}" ]] && commands="$TEST_UNDECLARED_OUTPUTS_DIR/commands.txt"
+[[ -n "$commands" ]] && : > "$commands"
+log_command() {
+  [[ -n "$commands" ]] || return 0
+  { printf '%s' "$1"; shift; printf ' %q' "$@"; printf '\n'; } >> "$commands"
+}
 now() { date +%s.%N; }
 measure() {
   local step="$1"; shift
+  log_command "$step" "$@"
   if [[ -z "$timing" ]]; then
     "$@"
   elif [[ -x /usr/bin/time ]]; then
@@ -149,6 +171,8 @@ if [[ -n "$clangxx" ]]; then
     "$clangxx" "$sysroot" > "$work/cxx"
   printf '#!/bin/sh\nexec "%s" --sysroot="%s" -fuse-ld=lld "$@"\n' "$clang" "$sysroot" > "$work/cc"
   chmod +x "$work/cxx" "$work/cc"
+  log_command cxx "$clangxx" --sysroot="$sysroot" -stdlib=libc++ -fuse-ld=lld -static-libstdc++ "<args>"
+  log_command cc "$clang" --sysroot="$sysroot" -fuse-ld=lld "<args>"
   export CXX="$work/cxx" CC="$work/cc"
 else
   # GCC needs these; clang turns coroutines on with -std=c++20 and inlines
@@ -168,7 +192,10 @@ case "$sim" in
     # compiled below with $CXX (the hermetic clang above) at -O2, the level
     # Verilator's own build uses by default (OPT_FAST). The options are
     # RTLMeter's (src/rtlmeter/verilator.py), less --quiet-stats.
-    a=(--cc --main --timing -Wno-fatal --top-module "$top" "+incdir+$incdir" --Mdir obj -o sim)
+    # --threads 1: one simulation thread, as every simulator gets on its one
+    # pinned core. Verilator's own optimization level is its default; it
+    # has no flag that names the default (only -O0 and -O3), see README.
+    a=(--cc --main --timing --threads 1 -Wno-fatal --top-module "$top" "+incdir+$incdir" --Mdir obj -o sim)
     for d in "${defines[@]}"; do a+=("+define+${d}"); done
     for p in "${params[@]}"; do a+=("-G${p}"); done
     a+=("${vargs[@]}")
@@ -215,8 +242,8 @@ case "$sim" in
     for p in "${params[@]}"; do a+=("-g/${top}/${p}"); done
     measure compile "$tool" "${a[@]}" "${sources[@]}"
     # DPI C/C++ sources are not part of the compiled design: xezim takes
-    # them when the design runs, and compiles them then with the host
-    # compiler. So for xezim, a DPI-C build is timed in the run step, not in
+    # them when the design runs, and compiles them then with the C
+    # compiler it finds ($CXX/$CC, the hermetic clang above, when set). So for xezim, a DPI-C build is timed in the run step, not in
     # compile (only RTLMeter's Example "loud" configuration has DPI-C).
     run=("$tool" --no-cache "$work/design.xzc" "${cppfiles[@]}")
     ;;
