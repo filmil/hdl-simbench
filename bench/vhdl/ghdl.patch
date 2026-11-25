@@ -1,0 +1,64 @@
+Two changes to the BCR module ghdl 6.0.0.bcr.5, for hdl-simbench.
+
+1. Optimization. GHDL's release build optimizes its Ada code (Makefile.in,
+--disable-checks: OPT_FLAGS+=-O, ADA_FLAGS+=-gnatp -gnatn). The module
+passes -gnatp but no -O, and rules_ada adds no optimization level, so its
+Ada is compiled at GCC's default -O0. This adds upstream's -O -gnatn to
+every Ada target.
+
+2. The C++ runtime. The module links ghdl with -lstdc++, so the binary
+needs libstdc++.so.6 from the host at run time, which may be older than
+GNAT 16's. The ghdl binary now links GNAT's static libstdc++ instead.
+
+--- a/BUILD.bazel
++++ b/BUILD.bazel
+@@ -98,6 +98,13 @@
+     "//conditions:default": ["-lstdc++"],
+ })
+ 
++# hdl-simbench patch: the ghdl binary links GNAT's libstdc++ in, so that it
++# does not load the host's, which may be older than GNAT's.
++_GHDL_CXX_RUNTIME_LINKOPTS = select({
++    "@platforms//os:macos": ["-lc++"],
++    "//conditions:default": ["-Wl,-Bstatic", "-lstdc++", "-Wl,-Bdynamic"],
++})
++
+ # ===========================================================================
+ # Generated Ada files (shared by both backends)
+ # ===========================================================================
+@@ -441,6 +448,8 @@
+     "-fPIC",
+     "-w",
+     "-gnatp",
++    "-O",
++    "-gnatn",
+ ]
+ 
+ ada_library(
+@@ -536,6 +545,8 @@
+         "-gnat12",
+         "-w",
+         "-gnatp",
++        "-O",
++        "-gnatn",
+     ],
+     # Upstream links every simulator binary with `-shared-libgcc` so that
+     # JIT-generated code and dlopen'd VPI/VHPI plugins share one unwinder with
+@@ -555,7 +566,7 @@
+             "-Wl,--export-dynamic",
+         ],
+         "//conditions:default": [],
+-    }) + _CXX_RUNTIME_LINKOPTS,
++    }) + _GHDL_CXX_RUNTIME_LINKOPTS,
+     visibility = ["//visibility:public"],
+     deps = [":ghdl_lib"] + select({
+         "@platforms//os:linux": [":_grt_version_script"],
+@@ -593,6 +604,8 @@
+         "-gnat12",
+         "-w",
+         "-gnatp",
++        "-O",
++        "-gnatn",
+     ],
+     # Without this the dylib/so only links thanks to lazy binding and fails
+     # at dlopen time (e.g. from pyGHDL) unless the host already loaded a

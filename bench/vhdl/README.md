@@ -46,7 +46,7 @@ Source: `coremark.bzl`.
 
 | | |
 |---|---|
-| Build | BCR module `ghdl` 6.0.0.bcr.5, from source, mcode back end, with `ghdl_ada_opt.patch` |
+| Build | BCR module `ghdl` 6.0.0.bcr.5, from source, mcode back end, with `ghdl.patch` (optimization; static libstdc++) |
 | Ada (GNAT 16.1.0) | `-gnat12 -fPIC -w -gnatp -O -gnatn` |
 | C and C++ (clang 23.1.5) | `-O2 -g0 -DNDEBUG -ffunction-sections -fdata-sections -fstack-protector-strong -D_FORTIFY_SOURCE=1 -fno-omit-frame-pointer`, from Bazel `-c opt` (the repository's `.bazelrc`) |
 | Analysis | `ghdl -a --std=08 --workdir=lib -Plib --work=<library> <file>` |

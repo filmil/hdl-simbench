@@ -115,14 +115,15 @@ register_toolchains("@llvm_toolchain//:all")
 # rules_ada's pinned integrity.
 bazel_dep(name = "ghdl", version = "6.0.0.bcr.5")
 
-# The module compiles GHDL's Ada at GCC's default -O0. The patch adds
-# upstream's release flags, -O -gnatn (see the patch's header).
+# The patch (see its header) adds upstream's release flags, -O -gnatn, to
+# GHDL's Ada, which the module compiles at -O0, and links GNAT's libstdc++
+# into ghdl, so that it needs only glibc from the host.
 single_version_override(
     module_name = "ghdl",
     # The patch is written against this version.
     version = "6.0.0.bcr.5",
     patch_strip = 1,
-    patches = ["//bench/vhdl:ghdl_ada_opt.patch"],
+    patches = ["//bench/vhdl:ghdl.patch"],
 )
 
 # C, for NEORV32's image_gen tool.
