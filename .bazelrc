@@ -11,6 +11,12 @@ common --registry=https://bcr.bazel.build
 # "Flags".
 build --compilation_mode=opt
 
+# bison 3.8.2.bcr.5 (via Verilator) calls getenv in src/bazel_runfiles.cc
+# without <cstdlib>; libstdc++ includes it by the way, libc++ does not.
+# bison 3.8.2.bcr.13 has the include; until the lockfile moves to it, add
+# it here. Only that file is affected.
+build --per_file_copt=external/bison.*/src/bazel_runfiles\.cc@-include,cstdlib
+
 test --test_output=errors
 
 try-import %workspace%/user.bazelrc
