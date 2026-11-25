@@ -7,7 +7,8 @@ What differs from campaign 1:
 
 - The machine's CI runners were paused for the whole window:
   `forgejo-runner-eph2` and `forgejo-runner-eph2-vivado` were scaled to 0
-  at 09:47:09 UTC, both idle, and resumed after 11:08 UTC. In campaign 1
+  at 09:47:09 UTC (both idle; both pods gone by 09:47:14) and scaled
+  back to 1 at 11:09:23 UTC, after the last run. In campaign 1
   their jobs loaded the machine, and the rules dropped too many runs of
   three cells.
 - Code: commit 6d74d4c, whose `//bench:timed_runs` keeps Bazel's own
