@@ -1,8 +1,26 @@
 # The custom registry first, for the filmil modules (for example
-# bazel_toolchains_verilator), then the BCR. "common", not "build", so that
+# xezim), then the BCR. "common", not "build", so that
 # query, mod and fetch resolve modules the same way builds do.
 common --registry=https://raw.githubusercontent.com/filmil/bazel-registry/main
 common --registry=https://bcr.bazel.build
+
+# Every simulator is built optimized (-O2 for C/C++, Rust's release
+# profile), and without debug info: Bazel's default, fastbuild, compiles at
+# -O0, which would slow the C/C++ simulators against xezim (always built
+# optimized, by its module). For tests and timed runs alike. See README.md,
+# "Flags".
+build --compilation_mode=opt
+
+# libc++ does not include headers by the way as libstdc++ does, and some
+# modules this build compiles rely on it (bison's bazel_runfiles.cc: getenv;
+# rules_cc_autoconf's checker: std::back_inserter). These includes, for
+# every C++ compile of the build and of its tools, stand in for that. They
+# do not reach the C++ model Verilator writes for each case, which
+# rtlmeter_case.sh compiles itself.
+build --cxxopt=-include --cxxopt=cstdlib --cxxopt=-include --cxxopt=cstring
+build --cxxopt=-include --cxxopt=iterator --cxxopt=-include --cxxopt=algorithm
+build --host_cxxopt=-include --host_cxxopt=cstdlib --host_cxxopt=-include --host_cxxopt=cstring
+build --host_cxxopt=-include --host_cxxopt=iterator --host_cxxopt=-include --host_cxxopt=algorithm
 
 test --test_output=errors
 
