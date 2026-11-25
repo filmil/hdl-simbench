@@ -106,6 +106,12 @@ parse_label() {
   return 1
 }
 
+# The CPUs other than $1 and $2, as a taskset list ("0,1,3").
+other_cpus() {
+  awk -v a="$1" -v b="$2" '$1 ~ /^cpu[0-9]+$/ { n = substr($1, 4); if (n != a && n != b) l = l (l == "" ? "" : ",") n }
+    END { print l }' "$PROC_STAT"
+}
+
 # Sourced by the test with TIMED_RUNS_LIB=1: the helpers only.
 [[ -n "${TIMED_RUNS_LIB:-}" ]] && return 0
 
@@ -176,9 +182,20 @@ elif [[ "$(head -1 "$out")" != "$header" ]]; then
   exit 2
 fi
 
+# Bazel itself (its client and server, and the work it does between runs)
+# stays off the pinned core and its sibling: every Bazel command runs under
+# taskset on the other CPUs, and the server is restarted first so that it
+# starts with that affinity too. Only the test, through --run_under, moves
+# to the pinned core. Niceness is not lowered, because the test would
+# inherit it from the server.
+others="$(other_cpus "$core" "${sibling:-none}")"
+[[ -n "$others" ]] || { echo "no CPUs left for Bazel besides $core and its sibling" >&2; exit 2; }
+bz() { taskset -c "$others" "$bazel" "$@"; }
+bz shutdown >&2
+
 # Build options only: "bazel info" rejects test options.
-testlogs="$("$bazel" info bazel-testlogs)"
-outbase="$("$bazel" info output_base)"
+testlogs="$(bz info bazel-testlogs)"
+outbase="$(bz info output_base)"
 
 samples="" sampler=""
 cleanup() {
@@ -208,7 +225,7 @@ for target in "${targets[@]}"; do
   # "bazel build" accepts the test options too (--test_env, --run_under and
   # the rest are part of the configuration), so the pre-build uses exactly
   # the runs' options and the first run does not re-analyze.
-  "$bazel" build "${bazel_args[@]}" "${test_opts[@]}" "$target" >&2
+  bz build "${bazel_args[@]}" "${test_opts[@]}" "$target" >&2
   for ((r = 1; r <= repeats; r++)); do
     free_gb="$(df -P -BG "$outbase" | awk 'NR == 2 { sub("G", "", $4); print $4 }')"
     if ((free_gb < min_free_gb)); then
@@ -226,7 +243,7 @@ for target in "${targets[@]}"; do
     l_before="$(load1)"
     before="$(snapshot "$core" "$sibling")"
     status=pass
-    "$bazel" test "${bazel_args[@]}" "${test_opts[@]}" "$target" >&2 || status=fail
+    bz test "${bazel_args[@]}" "${test_opts[@]}" "$target" >&2 || status=fail
     after="$(snapshot "$core" "$sibling")"
     l_after="$(load1)"
     kill "$sampler" 2>/dev/null || true
