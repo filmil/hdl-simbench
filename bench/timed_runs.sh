@@ -34,6 +34,8 @@
 # It stops before a run if the file system holding the Bazel output base has
 # under --min-free-gb free (default 15).
 set -euo pipefail
+# /proc/loadavg and the CSV use "." for decimals, whatever the locale.
+export LC_ALL=C
 
 # Overridable for //bench:timed_runs_test.
 PROC_STAT="${PROC_STAT:-/proc/stat}"
@@ -56,7 +58,8 @@ cpu_stat() {
 }
 # All cores but $1 and $2 (the pinned core and its sibling), summed.
 others_stat() {
-  awk -v a="cpu$1" -v b="cpu$2" '$1 ~ /^cpu[0-9]+$/ && $1 != a && $1 != b {
+  awk -v a="cpu$1" -v b="cpu$2" 'BEGIN { t = 0; idle = 0 }
+  $1 ~ /^cpu[0-9]+$/ && $1 != a && $1 != b {
     for (i = 2; i <= 9; i++) t += $i
     idle += $5 + $6
   } END { print t - idle, t, 0 }' "$PROC_STAT"
@@ -83,15 +86,21 @@ step() {
   awk -v s="$1" '$1 == s { print $2 "," $3 "," $4 "," $5; f = 1 } END { if (!f) print ",,," }' "$2"
 }
 
-# A label //pkg:name as "pkg name simulator case". The name is
-# <case>_<simulator>_test or <case>_<simulator>_smoke_test.
+# A label //pkg:name as "pkg name simulator case". The package is not the
+# root, and the name is <case>_<simulator>_test or
+# <case>_<simulator>_smoke_test.
 parse_label() {
-  local l="$1" pkg name base sim
-  [[ "$l" == //*:* ]] || { echo "need a full label //pkg:name: $l" >&2; return 1; }
-  pkg="${l#//}"; pkg="${pkg%%:*}"; name="${l##*:}"
-  base="${name%_test}"; base="${base%_smoke}"
-  sim="${base##*_}"
-  echo "$pkg $name $sim ${base%_"$sim"}"
+  local l="$1" pkg name base sim case_
+  if [[ "$l" =~ ^//([^:[:space:]]+):([^:[:space:]]+)_test$ ]]; then
+    pkg="${BASH_REMATCH[1]}"; base="${BASH_REMATCH[2]}"; base="${base%_smoke}"
+    name="${l##*:}"; sim="${base##*_}"; case_="${base%_"$sim"}"
+    if [[ "$base" == *_* && -n "$sim" && -n "$case_" && "$case_" != "$base" ]]; then
+      echo "$pkg $name $sim $case_"
+      return 0
+    fi
+  fi
+  echo "need //pkg:<case>_<simulator>_test: $l" >&2
+  return 1
 }
 
 # Sourced by the test with TIMED_RUNS_LIB=1: the helpers only.
@@ -154,14 +163,26 @@ cleanup() {
   [[ -n "$samples" ]] && rm -f "$samples"
   return 0
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 for target in "${targets[@]}"; do
   read -r pkg name sim case_ <<<"$(parse_label "$target")"
   design="${pkg##*/}"
   outputs="$testlogs/$pkg/$name/test.outputs"
-  # Build first, so that no build runs in a measured window.
-  "$bazel" build "${bazel_args[@]}" "$target" >&2
+  # Build first, with the same options as the runs (so that Bazel keeps
+  # its analysis), so that no build or analysis runs in a measured window.
+  test_opts=(
+    --cache_test_results=no
+    --strategy=TestRunner=local
+    --local_test_jobs=1
+    --nozip_undeclared_test_outputs
+    --run_under="taskset -c $core"
+    --test_output=errors
+  )
+  [[ -n "$max_cycles" ]] && test_opts+=(--test_env=SIMBENCH_MAX_CYCLES="$max_cycles")
+  "$bazel" test "${bazel_args[@]}" "${test_opts[@]}" --build_only "$target" >&2
   for ((r = 1; r <= repeats; r++)); do
     free_gb="$(df -P -BG "$outbase" | awk 'NR == 2 { sub("G", "", $4); print $4 }')"
     if ((free_gb < min_free_gb)); then
@@ -176,15 +197,7 @@ for target in "${targets[@]}"; do
     l_before="$(load1)"
     before="$(snapshot "$core" "$sibling")"
     status=pass
-    "$bazel" test "${bazel_args[@]}" \
-      --cache_test_results=no \
-      --strategy=TestRunner=local \
-      --local_test_jobs=1 \
-      --nozip_undeclared_test_outputs \
-      --run_under="taskset -c $core" \
-      ${max_cycles:+--test_env=SIMBENCH_MAX_CYCLES="$max_cycles"} \
-      --test_output=errors \
-      "$target" >&2 || status=fail
+    "$bazel" test "${bazel_args[@]}" "${test_opts[@]}" "$target" >&2 || status=fail
     after="$(snapshot "$core" "$sibling")"
     l_after="$(load1)"
     kill "$sampler" 2>/dev/null || true

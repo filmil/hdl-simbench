@@ -44,7 +44,12 @@ read -r -a B <<<"$before"
 read -r -a A <<<"$after"
 check "core busy" "$(pct "${B[*]:0:3}" "${A[*]:0:3}" 1)" "90.0"
 check "sibling idle" "$(pct "${B[*]:3:3}" "${A[*]:3:3}" 1)" ""
-check "steal" "$(pct "${B[*]:9:3}" "${A[*]:9:3}" 3)" ""
+check "steal unchanged" "$(pct "${B[*]:9:3}" "${A[*]:9:3}" 3)" ""
+# The whole machine: 100 more jiffies, 25 of them steal.
+check "steal" "$(pct "300 1000 50" "375 1100 75" 3)" "25.0"
+# No other CPUs than the pinned core and its sibling: still three fields.
+printf 'cpu  1 0 0 1 0 0 0 0 0 0\ncpu0 1 0 0 1 0 0 0 0 0 0\ncpu1 0 0 0 1 0 0 0 0 0 0\n' > "$d/stat2"
+check "no others" "$(PROC_STAT="$d/stat2" others_stat 0 1)" "0 0 0"
 
 echo "0.61 0.73 1.34 2/900 12345" > "$PROC_LOADAVG"
 check "load1" "$(load1)" "0.61"
@@ -59,10 +64,12 @@ check "label" "$(parse_label //third_party/rtlmeter/designs/VeeR-EL2:hiperf_cmar
   "third_party/rtlmeter/designs/VeeR-EL2 hiperf_cmark_iccm_xezim_test xezim hiperf_cmark_iccm"
 check "smoke label" "$(parse_label //a/b:kind_hello_verilator_smoke_test)" \
   "a/b kind_hello_verilator_smoke_test verilator kind_hello"
-if parse_label //a/b 2>/dev/null; then
-  echo "FAIL: a label without :name must be refused" >&2
-  fail=1
-fi
+for bad in //a/b //:kind_hello_verilator_test //a/b:foo_test //a/b:_verilator_test; do
+  if parse_label "$bad" > /dev/null 2>&1; then
+    echo "FAIL: $bad must be refused" >&2
+    fail=1
+  fi
+done
 
 [[ $fail -eq 0 ]] && echo PASS
 exit $fail

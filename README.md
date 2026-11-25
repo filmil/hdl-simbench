@@ -13,16 +13,21 @@ Work in progress; see https://github.com/filmil/hdl-simbench/issues/1.
 
 All C and C++ is compiled by one hermetic compiler: clang 23.1.5 with
 Chromium's Debian bullseye sysroot (glibc 2.31), registered for the whole
-build. The C++ library is LLVM's libc++ with libc++abi, libunwind and
-compiler-rt, all linked statically, so every simulator binary and every
-Verilator model needs only glibc from the host, and no newer glibc than
-2.31. Each case checks that of the binaries it runs (`check_elf` in
-`bench/rtlmeter_case.sh`: no libstdc++, libc++, libgcc_s or libunwind
-among their NEEDED libraries) and records their NEEDED lists and the
-host's `ldd` output with its command lines. It builds Verilator and Icarus, and compiles the C++ model Verilator
+build. It builds Verilator and Icarus, and compiles the C++ model Verilator
 writes for each case and DPI-C sources. xezim's module builds xezim's C code
 and link with its own copy of the same LLVM release and sysroot. The bench
 needs no compiler on the machine it runs on.
+
+The C++ library is LLVM's libc++, with libc++abi, libunwind and
+compiler-rt, all linked statically. So the SystemVerilog simulators'
+binaries and the Verilator models need nothing from the host but glibc
+2.31 or older, with one exception: xezim needs `libgcc_s.so.1` (see
+"Flags", xezim). Each SystemVerilog case checks the binaries it runs
+(`check_elf` in `bench/rtlmeter_case.sh`): every library they need must be
+one of glibc's, or named as an exception. It records their NEEDED lists,
+the newest glibc version they need, and the host's `ldd` output with the
+case's command lines. Not checked: the DPI-C library xezim compiles while
+a case runs, and the VHDL simulators, whose cases `bench/vhdl/` runs.
 
 Only open-source simulators are reported. Commercial simulator licenses
 commonly forbid publishing benchmark results; Vivado's, for one, does

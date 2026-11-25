@@ -39,6 +39,7 @@
 #       -- <source files>...
 
 set -euo pipefail
+export LC_ALL=C
 
 sim="" tool="" tool2="" vroot="" ivlbase="" top="" cycles="" timing="" posthook="" smoke="" tolerance=0
 commands="" readelf=""
@@ -93,8 +94,11 @@ tool="$(abs "$tool")"
 # $SIMBENCH_MAX_CYCLES, set by //bench:timed_runs for throughput runs, caps
 # every simulator at the same number of cycles with RTLMeter's +max_cycles.
 # As in a smoke test, a capped run skips the cycle check and the post hook.
+# It replaces a +max_cycles the case already has (a smoke test's).
 if [[ -n "${SIMBENCH_MAX_CYCLES:-}" ]]; then
-  plusargs+=("+max_cycles=${SIMBENCH_MAX_CYCLES}")
+  kept=()
+  for pa in "${plusargs[@]}"; do [[ "$pa" == +max_cycles=* ]] || kept+=("$pa"); done
+  plusargs=("${kept[@]}" "+max_cycles=${SIMBENCH_MAX_CYCLES}")
   smoke=1
 fi
 [[ -n "$posthook" ]] && posthook="$(abs "$posthook")"
@@ -147,34 +151,39 @@ log_command() {
   { printf '%s' "$1"; shift; printf ' %q' "$@"; printf '\n'; } >> "$commands"
 }
 # The binaries a run times must take nothing from the host but glibc, and no
-# glibc newer than the sysroot's 2.31: no libstdc++, libc++, libgcc_s or
-# libunwind among their NEEDED libraries. check_elf records each binary's
+# glibc newer than the sysroot's 2.31: every NEEDED library must be one of
+# glibc's (glibc_libs), or named by --allow-host-lib. check_elf records each binary's
 # NEEDED list, the newest GLIBC symbol version it needs, and the host's ldd
 # output (steps "elf" and "ldd"), and fails the case if a binary breaks the
 # rule.
+# glibc's own libraries: the only ones a binary may take from the host.
+glibc_libs=" libc.so.6 libm.so.6 libpthread.so.0 libdl.so.2 librt.so.1 libutil.so.1 libresolv.so.2 libmvec.so.1 ld-linux-x86-64.so.2 "
 check_elf() {
   [[ -n "$readelf" ]] || return 0
-  local bin="$1" needed glibc bad
-  needed="$("$readelf" -d "$bin" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' | tr '\n' ' ')"
-  glibc="$("$readelf" -V "$bin" | grep -o 'GLIBC_[0-9][0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)"
+  local bin="$1" needed glibc bad="" n a path sum
+  needed="$("$readelf" -d "$bin" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' | tr '\n' ' ' || true)"
+  glibc="$("$readelf" -V "$bin" | { grep -o 'GLIBC_[0-9][0-9.]*' || true; } | sed 's/GLIBC_//' | sort -V | tail -1)"
   log_command elf "$bin" "NEEDED: ${needed% }" "GLIBC: ${glibc:-none}"
   if command -v ldd > /dev/null; then
-    ldd "$bin" 2>&1 | while IFS= read -r l; do log_command ldd "$bin" "$l"; done
+    { ldd "$bin" 2>&1 || true; } | while IFS= read -r l; do log_command ldd "$bin" "$l"; done
   fi
-  bad="$(tr ' ' '\n' <<<"$needed" | grep -E '^lib(stdc\+\+|c\+\+|c\+\+abi|gcc_s|unwind)\.so' || true)"
-  # An allowed host library is recorded with the host file's path and
-  # SHA-256, so that every run says which one it used.
-  local a lib path
-  for a in "${allowed[@]}"; do
-    if grep -q -x -F "$a" <<<"$bad"; then
-      bad="$(grep -v -x -F "$a" <<<"$bad" || true)"
-      path="$(ldd "$bin" 2>/dev/null | awk -v l="$a" '$1 == l { print $3 }')"
-      lib="$(sha256sum "$path" 2>/dev/null | cut -d' ' -f1)"
-      log_command host-lib "$bin" "$a" "${path:-?}" "sha256:${lib:-?}"
-    fi
+  for n in $needed; do
+    [[ "$glibc_libs" == *" $n "* ]] && continue
+    # An allowed host library is recorded with the host file's path and
+    # SHA-256, so that every run says which one it used.
+    for a in "${allowed[@]}"; do
+      if [[ "$n" == "$a" ]]; then
+        path="$({ ldd "$bin" 2>/dev/null || true; } | awk -v l="$a" '$1 == l { print $3 }')"
+        sum=""
+        [[ -f "$path" ]] && sum="$(sha256sum "$path" | cut -d' ' -f1)"
+        log_command host-lib "$bin" "$a" "${path:-?}" "sha256:${sum:-?}"
+        continue 2
+      fi
+    done
+    bad+=" $n"
   done
   if [[ -n "$bad" ]]; then
-    echo "FAIL: $bin needs a C++ or GCC runtime from the host: $bad" >&2
+    echo "FAIL: $bin needs libraries from the host other than glibc's:$bad" >&2
     exit 1
   fi
   if [[ -n "$glibc" && "$(printf '%s\n2.31\n' "$glibc" | sort -V | tail -1)" != 2.31 ]]; then
@@ -308,7 +317,12 @@ esac
 # The simulator's own binaries, and the model a Verilator case built.
 check_elf "$tool"
 [[ -n "$tool2" ]] && check_elf "$tool2"
-[[ -n "$ivlbase" && -f "$ivlbase/ivl" ]] && check_elf "$ivlbase/ivl"
+# Icarus: ivl, ivlpp and the VPI modules vvp loads, all in its base dir.
+if [[ -n "$ivlbase" ]]; then
+  for f in "$ivlbase"/ivl "$ivlbase"/ivlpp "$ivlbase"/*.vpi; do
+    [[ -f "$f" ]] && check_elf "$f"
+  done
+fi
 [[ "$sim" == verilator ]] && check_elf "$work/obj/sim"
 
 cd "$work/run"
