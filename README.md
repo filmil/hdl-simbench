@@ -90,6 +90,15 @@ unchanged to all data:
   runs instead of a median of what is left.
 - Runs that fail are not timed results; a cell with a failing run is
   reported as failing.
+- A cell whose median run is under 1 s has its cycles per second marked
+  "resolution-limited": `/usr/bin/time` counts wall time in 0.01 s steps.
+  Its throughput comes from a longer run of the same simulator instead.
+
+Throughput at a common cycle cap (`timed_runs --max-cycles`) measures the
+first cycles of a program. On VeeR-EL2, the first 10,000 cycles are mostly
+reset and boot, which may run at a different speed from the program's
+steady state. Full-length runs of the same programs, where a simulator
+finishes them in reasonable time, are the steady-state comparison.
 
 ## Flags
 

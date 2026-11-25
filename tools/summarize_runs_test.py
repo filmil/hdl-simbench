@@ -57,6 +57,11 @@ class SummarizeTest(unittest.TestCase):
         ])
         self.assertEqual(len(cells), 4)
 
+    def test_resolution_limited(self):
+        self.assertTrue(s.summarize([row(run="0.14")] * 3)[0]["resolution_limited"])
+        self.assertFalse(s.summarize([row(run="1.0")] * 3)[0]["resolution_limited"])
+        self.assertIn("resolution-limited", s.markdown(s.summarize([row(run="0.1")] * 3)))
+
     def test_markdown(self):
         md = s.markdown(s.summarize([row(), row(), row()]))
         self.assertIn("| verilator 1 | Example | kind_hello | - |", md)

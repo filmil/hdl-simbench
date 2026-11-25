@@ -10,6 +10,8 @@
 - A cell that loses more than a third of its runs is marked "more runs
   needed" instead of reported.
 - A cell with a failing run is marked failing.
+- A cell whose median run is under 1 s has its cycles per second marked
+  "resolution-limited": the timer counts 0.01 s steps.
 
 Prints a Markdown table, and with --csv <file> also writes the summary as
 CSV.
@@ -22,6 +24,9 @@ import sys
 
 SIBLING_MAX = 25.0
 STEAL_MAX = 1.0
+# /usr/bin/time measures wall time in steps of 0.01 s: a run under 1 s has
+# more than 1% timer error, so its cycles per second is "resolution-limited".
+RESOLUTION_MIN_RUN_S = 1.0
 
 
 def _f(row, key):
@@ -77,6 +82,7 @@ def summarize(rows):
             c[name + "_min"] = min(vals)
             c[name + "_max"] = max(vals)
         c["cycles"] = kept[0].get("cycles", "")
+        c["resolution_limited"] = c["run_s"] < RESOLUTION_MIN_RUN_S
         commits = sorted({r.get("git_commit", "") for r in kept})
         c["git_commit"] = " ".join(x[:7] for x in commits)
         out.append(c)
@@ -99,6 +105,8 @@ def markdown(cells):
         mcps = ""
         if state == "ok":
             mcps = "%.3f [%.3f-%.3f]" % (c["cycles_per_s"] / 1e6, c["cycles_per_s_min"] / 1e6, c["cycles_per_s_max"] / 1e6)
+            if c["resolution_limited"]:
+                mcps += " (resolution-limited)"
         lines.append("| %s %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (
             c["simulator"], c["simulator_version"], c["design"], c["case"], c["max_cycles"] or "-",
             c.get("cycles", ""),
