@@ -144,6 +144,15 @@ single_version_override(
     patches = ["//bench/vhdl:ghdl.patch"],
 )
 
+# NVC 1.22.0, prebuilt with LLVM by bazel_toolchains_nvc's release workflow,
+# which attests the binary's build provenance; 0.2.0 pins that attested
+# binary (nvc-1.22.0-324ed157-r2) by sha256. The bench runs the binary
+# directly (bench/vhdl/vhdl_case.sh), so no toolchain is registered.
+bazel_dep(name = "bazel_toolchains_nvc", version = "0.2.0")
+
+nvc_binary = use_extension("@bazel_toolchains_nvc//nvc:extension.bzl", "nvc_binary")
+use_repo(nvc_binary, "nvc_prebuilt")
+
 # C, for NEORV32's image_gen tool.
 bazel_dep(name = "rules_cc", version = "0.2.28")
 

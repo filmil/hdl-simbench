@@ -69,9 +69,19 @@ built from source, and the bench does not use it.
 
 ### NVC
 
-Pending an attested binary (filmil/bazel_toolchains_nvc PR 2). Its flags go
-here, with the optimization level of its elaboration step written out, once
-it runs.
+| | |
+|---|---|
+| Build | NVC 1.22.0 (commit 324ed157), LLVM 18.1.8 code generator, from `bazel_toolchains_nvc` 0.2.0: release `nvc-1.22.0-324ed157-r2`, built by that repository's release workflow in Ubuntu 20.04, with attested build provenance, pinned by sha256 |
+| Analysis | `nvc --std=2008 -L <std libs> --work=<library>:lib/<library> -L lib -a <files>` |
+| Elaboration | `nvc --std=2008 -L <std libs> --work=work:lib/work -L lib -e -O2 coremark_tb` |
+| Run | `nvc --std=2008 -L <std libs> --work=work:lib/work -L lib -r coremark_tb --ieee-warnings=off --exit-severity=error` |
+
+NVC compiles the design to machine code with LLVM during elaboration, so
+that time counts as "compile". `-O2` is NVC's default level, written out.
+The run options turn off IEEE library warnings, as GHDL's
+`--ieee-asserts=disable` does, and stop on an error, as GHDL's
+`--assert-level=error` does. The standard libraries are the ones that came
+with the binary, compiled by it.
 
 ## Comparing the numbers
 
