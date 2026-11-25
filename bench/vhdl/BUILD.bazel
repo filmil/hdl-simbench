@@ -64,6 +64,7 @@ sh_test(
         "--top",
         "coremark_tb",
     ] + _COREMARK_CHECKS + [
+        # do not sort: the files are analysed in this order.
         "--",
         # The program's image is a package that neorv32_imem uses, so it is
         # analysed into library neorv32 before the processor.

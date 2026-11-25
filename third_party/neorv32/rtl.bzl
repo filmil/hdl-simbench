@@ -6,6 +6,7 @@
 # does not keep this order (Bazel sorts its files), so cases name the
 # files one by one from this list.
 NEORV32_RTL = [
+    # do not sort: VHDL is analysed in this order, dependencies first.
     "rtl/core/neorv32_package.vhd",
     "rtl/core/neorv32_sys.vhd",
     "rtl/core/neorv32_prim.vhd",
