@@ -4,6 +4,7 @@
 # the same script, vhdl_case.sh.
 
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//third_party/neorv32:rtl.bzl", "NEORV32_RTL")
 load(":coremark.bzl", "coremark_image")
 
 exports_files([
@@ -68,7 +69,10 @@ sh_test(
         # analysed into library neorv32 before the processor.
         "@lib=neorv32",
         "$(rootpath :coremark_1_imem_image)",
-        "$(rootpaths //third_party/neorv32:rtl)",
+    ] + [
+        "$(rootpath //third_party/neorv32:%s)" % f
+        for f in NEORV32_RTL
+    ] + [
         "@lib=work",
         "$(rootpath :coremark_tb.vhd)",
         "@ghdl-libs",

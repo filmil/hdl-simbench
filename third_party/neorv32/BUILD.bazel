@@ -9,6 +9,7 @@
 #   sw/image_gen           the tool that turns a program into a VHDL ROM
 
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load(":rtl.bzl", "NEORV32_RTL")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -16,68 +17,14 @@ licenses(["notice"])
 
 exports_files(["LICENSE"])
 
-# The processor's VHDL in upstream's analysis order (rtl/file_list_core.f),
-# for library neorv32. neorv32_imem_image.vhd is left out: it holds the
-# program that the instruction memory starts with, and each bench case
-# generates its own.
+# The processor's VHDL, for library neorv32. Each file is exported so that
+# a case can pass them in NEORV32_RTL's order (rtl.bzl).
 filegroup(
     name = "rtl",
-    srcs = [
-        "rtl/core/neorv32_package.vhd",
-        "rtl/core/neorv32_sys.vhd",
-        "rtl/core/neorv32_prim.vhd",
-        "rtl/core/neorv32_cpu_decompressor.vhd",
-        "rtl/core/neorv32_cpu_frontend.vhd",
-        "rtl/core/neorv32_cpu_control.vhd",
-        "rtl/core/neorv32_cpu_hwtrig.vhd",
-        "rtl/core/neorv32_cpu_counters.vhd",
-        "rtl/core/neorv32_cpu_alu_shifter.vhd",
-        "rtl/core/neorv32_cpu_alu_muldiv.vhd",
-        "rtl/core/neorv32_cpu_alu_bitmanip.vhd",
-        "rtl/core/neorv32_cpu_alu_fpu.vhd",
-        "rtl/core/neorv32_cpu_alu_cond.vhd",
-        "rtl/core/neorv32_cpu_alu_crypto.vhd",
-        "rtl/core/neorv32_cpu_alu.vhd",
-        "rtl/core/neorv32_cpu_lsu.vhd",
-        "rtl/core/neorv32_cpu_pmp.vhd",
-        "rtl/core/neorv32_cpu_trace.vhd",
-        "rtl/core/neorv32_cpu.vhd",
-        "rtl/core/neorv32_cache.vhd",
-        "rtl/core/neorv32_bus.vhd",
-        "rtl/core/neorv32_core_complex.vhd",
-        "rtl/core/neorv32_dma.vhd",
-        "rtl/core/neorv32_smc.vhd",
-        "rtl/core/neorv32_xbus.vhd",
-        "rtl/core/neorv32_sdi.vhd",
-        "rtl/core/neorv32_gpio.vhd",
-        "rtl/core/neorv32_wdt.vhd",
-        "rtl/core/neorv32_clint.vhd",
-        "rtl/core/neorv32_uart.vhd",
-        "rtl/core/neorv32_spi.vhd",
-        "rtl/core/neorv32_twi.vhd",
-        "rtl/core/neorv32_twd.vhd",
-        "rtl/core/neorv32_pwm.vhd",
-        "rtl/core/neorv32_trng.vhd",
-        "rtl/core/neorv32_neoled.vhd",
-        "rtl/core/neorv32_gptmr.vhd",
-        "rtl/core/neorv32_onewire.vhd",
-        "rtl/core/neorv32_slink.vhd",
-        "rtl/core/neorv32_tracebuf.vhd",
-        "rtl/core/neorv32_sysinfo.vhd",
-        "rtl/core/neorv32_debug_dtm.vhd",
-        "rtl/core/neorv32_debug_auth.vhd",
-        "rtl/core/neorv32_debug_dm.vhd",
-        "rtl/core/neorv32_top.vhd",
-        "rtl/core/neorv32_cpu_alu_cfu.vhd",
-        "rtl/core/neorv32_cpu_regfile.vhd",
-        "rtl/core/neorv32_cache_ram.vhd",
-        "rtl/core/neorv32_imem.vhd",
-        "rtl/core/neorv32_dmem.vhd",
-        "rtl/core/neorv32_bootrom_image.vhd",
-        "rtl/core/neorv32_bootrom.vhd",
-        "rtl/core/neorv32_cfs.vhd",
-    ],
+    srcs = NEORV32_RTL,
 )
+
+exports_files(NEORV32_RTL)
 
 filegroup(
     name = "sw_lib_srcs",
