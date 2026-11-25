@@ -89,6 +89,12 @@ llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
 llvm.toolchain(
     name = "llvm_toolchain",
     llvm_version = "23.1.5",
+    # The sysroot's libstdc++ (GCC 10), not LLVM's libc++: the C++ modules
+    # this build compiles (bison, rules_cc_autoconf, ...) are written and
+    # tested against libstdc++, and some rely on headers it includes by the
+    # way. The runtime is the host's libstdc++.so.6, which every target
+    # machine has (eph2: 6.0.33).
+    stdlib = {"": "stdc++"},
 )
 llvm.sysroot(
     name = "llvm_toolchain",

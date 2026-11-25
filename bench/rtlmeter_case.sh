@@ -158,8 +158,8 @@ measure() {
 
 # The C++ compiler: the hermetic clang with its sysroot when given, as small
 # wrappers that Verilator's build and xezim's DPI-C build both call (CXX, CC).
-# libc++ is linked statically, so a built model needs no C++ library from the
-# machine it runs on. Without --clangxx, the host's c++.
+# The C++ library is the sysroot's libstdc++ (GCC 10) headers, as for the
+# whole build; at run time, the host's libstdc++.so.6. Without --clangxx, the host's c++.
 cxxflags=(-std=c++20 -O2)
 cxxlibs=(-pthread)
 if [[ -n "$clangxx" ]]; then
@@ -167,11 +167,11 @@ if [[ -n "$clangxx" ]]; then
   # <sysroot>/usr/include/stdio.h
   sysroot="$(dirname "$(dirname "$(dirname "$sysrootfile")")")"
   clang="$(dirname "$clangxx")/clang"
-  printf '#!/bin/sh\nexec "%s" --sysroot="%s" -stdlib=libc++ -fuse-ld=lld -static-libstdc++ -Wno-unused-command-line-argument "$@"\n' \
+  printf '#!/bin/sh\nexec "%s" --sysroot="%s" -stdlib=libstdc++ -fuse-ld=lld -Wno-unused-command-line-argument "$@"\n' \
     "$clangxx" "$sysroot" > "$work/cxx"
   printf '#!/bin/sh\nexec "%s" --sysroot="%s" -fuse-ld=lld -Wno-unused-command-line-argument "$@"\n' "$clang" "$sysroot" > "$work/cc"
   chmod +x "$work/cxx" "$work/cc"
-  log_command cxx "$clangxx" --sysroot="$sysroot" -stdlib=libc++ -fuse-ld=lld -static-libstdc++ -Wno-unused-command-line-argument "<args>"
+  log_command cxx "$clangxx" --sysroot="$sysroot" -stdlib=libstdc++ -fuse-ld=lld -Wno-unused-command-line-argument "<args>"
   log_command cc "$clang" --sysroot="$sysroot" -fuse-ld=lld -Wno-unused-command-line-argument "<args>"
   export CXX="$work/cxx" CC="$work/cc"
 else
