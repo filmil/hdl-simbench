@@ -115,14 +115,33 @@ register_toolchains("@llvm_toolchain//:all")
 # rules_ada's pinned integrity.
 bazel_dep(name = "ghdl", version = "6.0.0.bcr.5")
 
-# The module compiles GHDL's Ada at GCC's default -O0. The patch adds
-# upstream's release flags, -O -gnatn (see the patch's header).
+# GNAT, which builds GHDL's Ada, linking with the sysroot above
+# (//toolchains/gnat). Registered here, so it comes before rules_ada's own
+# GNAT toolchain, which links against the build machine's C library.
+bazel_dep(name = "rules_ada", version = "0.3.0")
+
+# The same GNAT archive that rules_ada 0.3.0 pins (its versions.bzl), as a
+# repository whose files this module can name: periareon/hermetic-gnat
+# 2026.09.30; the published .sha256 matches GitHub's digest and this one.
+http_archive(
+    name = "gnat_linux_x86_64",
+    build_file = "//toolchains/gnat:gnat.BUILD.bazel",
+    sha256 = "f5094291f3542a360bd41b635a12e4ff1deba86719396073e308860935de306d",
+    strip_prefix = "gnat-x86_64-linux-16.1.0",
+    urls = ["https://github.com/periareon/hermetic-gnat/releases/download/2026.09.30/gnat-x86_64-linux-16.1.0.tar.gz"],
+)
+
+register_toolchains("//toolchains/gnat:gnat_linux_x86_64")
+
+# The patch (see its header) adds upstream's release flags, -O -gnatn, to
+# GHDL's Ada, which the module compiles at -O0, and links GNAT's libstdc++
+# into ghdl, so that it needs only glibc from the host.
 single_version_override(
     module_name = "ghdl",
     # The patch is written against this version.
     version = "6.0.0.bcr.5",
     patch_strip = 1,
-    patches = ["//bench/vhdl:ghdl_ada_opt.patch"],
+    patches = ["//bench/vhdl:ghdl.patch"],
 )
 
 # C, for NEORV32's image_gen tool.

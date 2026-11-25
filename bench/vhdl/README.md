@@ -46,8 +46,9 @@ Source: `coremark.bzl`.
 
 | | |
 |---|---|
-| Build | BCR module `ghdl` 6.0.0.bcr.5, from source, mcode back end, with `ghdl_ada_opt.patch` |
+| Build | BCR module `ghdl` 6.0.0.bcr.5, from source, mcode back end, with `ghdl.patch` (optimization; static libstdc++) |
 | Ada (GNAT 16.1.0) | `-gnat12 -fPIC -w -gnatp -O -gnatn` |
+| Ada link | `//toolchains/gnat`: GNAT 16.1.0 with LLVM's lld, against the bullseye sysroot (glibc 2.31), and a copy of `libgnat.a` that calls `fcntl` for `fcntl64` |
 | C and C++ (clang 23.1.5) | `-O2 -g0 -DNDEBUG -ffunction-sections -fdata-sections -fstack-protector-strong -D_FORTIFY_SOURCE=1 -fno-omit-frame-pointer`, from Bazel `-c opt` (the repository's `.bazelrc`) |
 | Analysis | `ghdl -a --std=08 --workdir=lib -Plib --work=<library> <file>` |
 | Run | `ghdl -r --std=08 --workdir=lib -Plib coremark_tb --max-stack-alloc=0 --ieee-asserts=disable --assert-level=error` |
@@ -77,6 +78,18 @@ it runs.
 "compile" and "run" split the work differently per simulator (see
 `vhdl_case.sh`), so the sum of the two is the comparable number. Analysis
 runs one simulator command per library, with that library's files in
-order, so process start-up is not counted once per file. Each
+order, so process start-up is not counted once per file.
+
+Timed runs use `//bench:timed_runs`, as for the SystemVerilog cases, for
+example `bazel-bin/bench/timed_runs --core 2 --repeats 5 --out vhdl.csv
+//bench/vhdl:coremark_ghdl_test`. Each step's wall, user and system time
+and peak memory come from `/usr/bin/time`; the cycles are the clock cycles
+the testbench simulated (its "simbench cycles" line), so cycles per second
+of "run" can be compared across simulators. With `--readelf`, the
+simulator binary may take only glibc 2.31 or older from the host, with no
+symbol version tied to a newer or particular glibc, plus the libraries
+`--allow-host-lib` names, each recorded with its path and SHA-256. Its
+NEEDED list is in the command record. Only the binary's own needs are
+checked: not those of an allowed library, and not code NVC generates. Each
 timed run also records the machine, the simulator's version and the
 command lines.

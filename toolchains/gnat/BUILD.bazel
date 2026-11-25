@@ -1,0 +1,149 @@
+# GNAT 16.1.0 for Linux x86-64, as rules_ada 0.3.0 defines it, plus the
+# Debian bullseye sysroot for its link step.
+#
+# rules_ada's own GNAT toolchain links against the build machine's C library
+# (crt files, libc.so), because GNAT's gcc driver gets no sysroot. GHDL's
+# binary then needs the build machine's glibc (2.38 on CI), and a machine
+# without C development files, like eph2, cannot link it at all. This
+# toolchain is the same GNAT with the sysroot that the C and C++ toolchain
+# uses (@sysroot_linux_x86_64, glibc 2.31). The root module registers it,
+# so it is chosen before rules_ada's.
+
+load("@rules_ada//ada:ada_toolchain.bzl", "ada_toolchain")
+load("@rules_ada//ada:defs.bzl", "ada_binary")
+load("@rules_ada//ada/toolchains:defs.bzl", "LINK_ACTIONS", "ada_args")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+# The sysroot's path in the execution root. Ada link arguments have no
+# $(location); this is the repository's canonical name, the one the C and C++
+# toolchain's --sysroot shows in "bazel aquery".
+_SYSROOT = "external/+http_archive+sysroot_linux_x86_64"
+
+# The same for the LLVM release of the C and C++ toolchain, whose lld does
+# the link. GNU ld, GNAT's own, resolves the absolute paths in the
+# sysroot's libc.so linker script against the host when the sysroot is a
+# tree of symlinks (as in Bazel's sandbox), and mixes the host's ld.so into
+# the link; lld does not.
+_LLVM_BIN = "external/toolchains_llvm++llvm+llvm_toolchain_llvm/bin"
+
+# These two are Bazel's canonical repository names, which ada_args cannot
+# compute (it takes plain strings). If one goes stale, gcc ignores the -B
+# directory, and the link fails, or uses another lld; hello_test checks
+# that lld linked the binary against glibc 2.31 or older, so either shows.
+# The toolchain also names GNAT 16.1.0 and rules_ada's version setting: if
+# rules_ada's default GNAT changed, this toolchain would stop matching and
+# rules_ada's own would link against the host, which hello_test and
+# coremark_ghdl_test's binary check would both reject.
+
+_LINUX_X86_64 = [
+    "@platforms//cpu:x86_64",
+    "@platforms//os:linux",
+]
+
+ada_args(
+    name = "sysroot",
+    actions = LINK_ACTIONS,
+    args = [
+        "-fuse-ld=lld",
+        "-B" + _LLVM_BIN,
+        "--sysroot=" + _SYSROOT,
+        # GNAT's gcc is not built for Debian's multiarch layout, so it is
+        # told where the sysroot's crt files and libraries are.
+        "-B" + _SYSROOT + "/usr/lib/x86_64-linux-gnu",
+        "-L" + _SYSROOT + "/usr/lib/x86_64-linux-gnu",
+        "-L" + _SYSROOT + "/lib/x86_64-linux-gnu",
+        # Where ld finds the libraries that the sysroot's own libraries
+        # need (libpthread.so needs libc.so.6 and ld-linux-x86-64.so.2).
+        "-Wl,-rpath-link=" + _SYSROOT + "/lib/x86_64-linux-gnu",
+        "-Wl,-rpath-link=" + _SYSROOT + "/usr/lib/x86_64-linux-gnu",
+    ],
+    data = [
+        # ld.lld is a symbolic link to lld.
+        "@llvm_toolchain_llvm//:bin/ld.lld",
+        "@llvm_toolchain_llvm//:bin/lld",
+        "@sysroot_linux_x86_64//:sysroot",
+    ],
+)
+
+# GNAT's prebuilt libgnat.a was compiled against newer glibc headers, which
+# turn fcntl into fcntl64; glibc 2.31 has fcntl64 only under a non-default
+# symbol version, so it does not link. On x86-64 the two are the same
+# function (off_t is 64 bits), so this copy calls fcntl. It is the only
+# symbol GNAT's runtime archives need that the sysroot's glibc lacks.
+genrule(
+    name = "libgnat_glibc231",
+    srcs = ["@gnat_linux_x86_64//:lib/gcc/x86_64-pc-linux-gnu/16.1.0/adalib/libgnat.a"],
+    outs = ["glibc231/libgnat.a"],
+    cmd = "$(execpath @llvm_toolchain_llvm//:bin/llvm-objcopy) --redefine-sym fcntl64=fcntl $< $@",
+    target_compatible_with = _LINUX_X86_64,
+    tools = ["@llvm_toolchain_llvm//:bin/llvm-objcopy"],
+)
+
+ada_toolchain(
+    name = "gnat_16_1_0",
+    ada_std = "@gnat_linux_x86_64//:ada_std",
+    ar = "@gnat_linux_x86_64//:bin/ar",
+    args = [
+        "@rules_ada//ada/toolchains/args/elf:link_line",
+        "@rules_ada//ada/toolchains/args/elf:linux_system_libs",
+        ":sysroot",
+    ],
+    binder = "@gnat_linux_x86_64//:bin/gnatbind",
+    compiler = "@gnat_linux_x86_64//:bin/gcc",
+    compiler_lib = "@gnat_linux_x86_64//:compiler_lib",
+    enabled_features = ["@rules_ada//ada/toolchains/features:static_libgcc"],
+    gcov = "@gnat_linux_x86_64//:bin/gcov",
+    known_features = ["@rules_ada//ada/toolchains/features:static_libgcc"],
+    static_runtime_lib = [
+        "@gnat_linux_x86_64//:lib/gcc/x86_64-pc-linux-gnu/16.1.0/adalib/libgnarl.a",
+        ":libgnat_glibc231",
+        "@gnat_linux_x86_64//:lib/gcc/x86_64-pc-linux-gnu/16.1.0/libgcc.a",
+        "@gnat_linux_x86_64//:lib/libatomic.a",
+    ],
+    target_triple = "x86_64-pc-linux-gnu",
+)
+
+toolchain(
+    name = "gnat_linux_x86_64",
+    exec_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+    target_compatible_with = _LINUX_X86_64,
+    target_settings = ["@rules_ada//ada/settings:version_16.1.0"],
+    toolchain = ":gnat_16_1_0",
+    toolchain_type = "@rules_ada//ada:toolchain_type",
+)
+
+# A small Ada program linked by this toolchain: it must need nothing from
+# the host but glibc 2.31 or older, and run.
+ada_binary(
+    name = "hello",
+    srcs = ["hello.adb"],
+    target_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+)
+
+sh_test(
+    name = "hello_test",
+    size = "small",
+    srcs = ["hello_test.sh"],
+    args = [
+        "$(rootpath :hello)",
+        "$(rootpath @llvm_toolchain_llvm//:bin/llvm-readelf)",
+        "$(rootpath :libgnat_glibc231)",
+        "$(rootpath @llvm_toolchain_llvm//:bin/llvm-nm)",
+    ],
+    data = [
+        ":hello",
+        ":libgnat_glibc231",
+        "@llvm_toolchain_llvm//:bin/llvm-nm",
+        "@llvm_toolchain_llvm//:bin/llvm-readelf",
+    ],
+    target_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+)

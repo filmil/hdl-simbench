@@ -5,9 +5,16 @@
 # Runs one VHDL case with one VHDL simulator, and checks its output.
 #
 # Every simulator gets the same sources, libraries, top entity and VHDL
-# standard (2008). Compile and run are timed separately, as in
-# bench/rtlmeter_case.sh; with --timing <file>, one "step seconds" pair per
-# line is appended to it.
+# standard (2008). Compile and run are timed separately, in the format of
+# bench/rtlmeter_case.sh, which //bench:timed_runs reads. With --timing
+# <file>, one line per step is appended to it,
+#   <step> <wall s> <user s> <system s> <max RSS KiB>
+# summed over the step's commands (RSS: the largest), measured by
+# GNU time as /usr/bin/time, or "<step> <wall s>" alone without it; then
+# "cycles <n>", the clock cycles the design simulated.
+#
+# The testbench must print "simbench cycles <n>" (n > 0) when it ends, with
+# or without --timing: a run without that line fails.
 #
 #   compile  GHDL: analysis of every file. NVC: analysis and elaboration,
 #            where NVC generates the design's machine code.
@@ -25,9 +32,14 @@
 # Usage:
 #   vhdl_case.sh --sim ghdl|nvc --tool <binary> --top <entity>
 #       [--expect <text>]... [--reject <text>]... [--timing <file>]
-#       [--commands <file>]
+#       [--commands <file>] [--readelf <llvm-readelf>]
+#       [--allow-host-lib <soname>]...
 #       -- [@lib=<library>] <file>... [@lib=<library> <file>...]...
 #          [@ghdl-libs <file>...]
+#
+# With --readelf, the simulator binary may take nothing from the host but
+# glibc 2.31 or older, and the libraries --allow-host-lib names, as in
+# rtlmeter_case.sh; its NEEDED list goes in the command record.
 #
 # The files after -- are analysed in the order given, each into the library
 # the last @lib= names (work before any). The files after @ghdl-libs are
@@ -42,8 +54,8 @@
 
 set -euo pipefail
 
-sim="" tool="" prefix="" top="" timing="" commands=""
-expects=() rejects=()
+sim="" tool="" prefix="" top="" timing="" commands="" readelf=""
+expects=() rejects=() allowed=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --sim) sim="$2"; shift 2 ;;
@@ -53,6 +65,8 @@ while [[ $# -gt 0 ]]; do
     --reject) rejects+=("$2"); shift 2 ;;
     --timing) timing="$2"; shift 2 ;;
     --commands) commands="$2"; shift 2 ;;
+    --readelf) readelf="$2"; shift 2 ;;
+    --allow-host-lib) allowed+=("$2"); shift 2 ;;
     --) shift; break ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -88,24 +102,89 @@ if [[ -n "${TEST_UNDECLARED_OUTPUTS_DIR:-}" ]]; then
 fi
 [[ -n "$timing" ]] && timing="$(abs "$timing")"
 [[ -n "$commands" ]] && commands="$(abs "$commands")"
+[[ -n "$readelf" ]] && readelf="$(abs "$readelf")"
 
 work="$(mktemp -d "${TEST_TMPDIR:-${TMPDIR:-/tmp}}/vhdl_case.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 cd "$work"
 
 now() { date +%s.%N; }
-record() {
-  if [[ -n "$timing" ]]; then printf '%s %s\n' "$1" "$2" >> "$timing"; fi
+log_command() {
+  [[ -n "$commands" ]] || return 0
+  { printf '%s' "$1"; shift; printf ' %q' "$@"; printf '\n'; } >> "$commands"
 }
-elapsed() { awk -v a="$1" -v b="$2" 'BEGIN { printf "%.3f", b - a }'; }
-# step: runs the command after the step name, and records it.
+# GNU time's -f, -a and -o; another /usr/bin/time (BusyBox) takes the
+# fallback.
+gnu_time=0
+if [[ -x /usr/bin/time ]] && /usr/bin/time -f %e -a -o /dev/null true 2> /dev/null; then gnu_time=1; fi
+# step: runs the command after the step name, records it, and appends its
+# measurement, "<step> <wall> <user> <system> <max RSS>", to steps.txt.
+# The timing file gets the sums only once the run has passed.
 step() {
-  local name="$1"; shift
-  if [[ -n "$commands" ]]; then
-    { printf '%s' "$name"; printf ' %q' "$@"; printf '\n'; } >> "$commands"
+  local name="$1" st=0 t0 t1; shift
+  log_command "$name" "$@"
+  if [[ $gnu_time == 1 ]]; then
+    /usr/bin/time -f "$name %e %U %S %M" -a -o "$work/steps.txt" "$@" || st=$?
+  else
+    t0="$(now)"
+    "$@" || st=$?
+    t1="$(now)"
+    awk -v s="$name" -v a="$t0" -v b="$t1" 'BEGIN { printf "%s %.3f\n", s, b - a }' >> "$work/steps.txt"
   fi
-  "$@"
+  return $st
 }
+# The same rule as rtlmeter_case.sh's check_elf.
+glibc_libs=" libc.so.6 libm.so.6 libpthread.so.0 libdl.so.2 librt.so.1 libutil.so.1 libresolv.so.2 libmvec.so.1 ld-linux-x86-64.so.2 "
+check_elf() {
+  [[ -n "$readelf" ]] || return 0
+  local bin="$1" needed glibc bad="" n a path sum
+  local dyn ver odd
+  dyn="$("$readelf" -d "$bin")" || { echo "FAIL: $readelf -d $bin failed" >&2; exit 1; }
+  ver="$("$readelf" -V "$bin")" || { echo "FAIL: $readelf -V $bin failed" >&2; exit 1; }
+  needed="$(sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' <<< "$dyn" | tr '\n' ' ')"
+  glibc="$({ grep -o 'GLIBC_[0-9][0-9.]*' <<< "$ver" || true; } | sed 's/GLIBC_//' | sort -V | tail -1)"
+  # Symbol versions that are not a release number (GLIBC_PRIVATE,
+  # GLIBC_ABI_DT_RELR from glibc 2.36) tie a binary to a newer or a
+  # particular glibc.
+  odd="$({ grep -o 'GLIBC_[A-Za-z0-9_.]*' <<< "$ver" || true; } | { grep -v '^GLIBC_[0-9][0-9.]*$' || true; } | sort -u | tr '\n' ' ')"
+  log_command elf "$bin" "NEEDED: ${needed% }" "GLIBC: ${glibc:-none}"
+  if command -v ldd > /dev/null; then
+    { ldd "$bin" 2>&1 || true; } | while IFS= read -r l; do log_command ldd "$bin" "$l"; done
+  fi
+  for n in $needed; do
+    [[ "$glibc_libs" == *" $n "* ]] && continue
+    for a in "${allowed[@]}"; do
+      if [[ "$n" == "$a" ]]; then
+        path="$({ ldd "$bin" 2>/dev/null || true; } | awk -v l="$a" '$1 == l { print $3 }')"
+        sum=""
+        [[ -f "$path" ]] && sum="$(sha256sum "$path" | cut -d' ' -f1)"
+        log_command host-lib "$bin" "$a" "${path:-?}" "sha256:${sum:-?}"
+        continue 2
+      fi
+    done
+    bad+=" $n"
+  done
+  if [[ -n "$odd" ]]; then
+    echo "FAIL: $bin needs glibc symbol versions tied to a newer or particular glibc: ${odd% }" >&2
+    exit 1
+  fi
+  if [[ -n "$bad" ]]; then
+    echo "FAIL: $bin needs libraries from the host other than glibc's:$bad" >&2
+    exit 1
+  fi
+  if [[ -n "$glibc" && "$(printf '%s\n2.31\n' "$glibc" | sort -V | tail -1)" != 2.31 ]]; then
+    echo "FAIL: $bin needs glibc $glibc, newer than the sysroot's 2.31" >&2
+    # Which symbols: those bound to a version newer than 2.31.
+    "$readelf" --dyn-syms --wide "$bin" | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /@GLIBC_[0-9]/) print $i }' |
+      sed -n 's/.*@\(GLIBC_[0-9.]*\).*/&/p' | sort -u |
+      while IFS= read -r sym; do
+        v="${sym##*@GLIBC_}"
+        if [[ "$(printf '%s\n2.31\n' "$v" | sort -V | tail -1)" != 2.31 ]]; then echo "  $sym" >&2; fi
+      done || true
+    exit 1
+  fi
+}
+check_elf "$tool"
 # groups: one "<library>\t<file> <file>..." entry per run of consecutive
 # files in the same library, in analysis order.
 groups=() glib="" gfiles=""
@@ -123,18 +202,15 @@ case "$sim" in
     if [[ -n "$commands" ]]; then printf 'env GHDL_PREFIX=%q\n' "$GHDL_PREFIX" >> "$commands"; fi
     common=(--std=08 --workdir=lib -Plib)
     mkdir lib
-    t0="$(now)"
     for g in "${groups[@]}"; do
       read -r -a files <<< "${g#*$'\t'}"
       step compile "$tool" -a "${common[@]}" --work="${g%%$'\t'*}" "${files[@]}"
     done
-    t1="$(now)"
     # As NEORV32's own sim/ghdl.sh runs it.
     run=("$tool" -r "${common[@]}" "$top" --max-stack-alloc=0 --ieee-asserts=disable --assert-level=error)
     ;;
   nvc)
     common=(--std=2008)
-    t0="$(now)"
     mkdir lib
     for g in "${groups[@]}"; do
       l="${g%%$'\t'*}"
@@ -144,7 +220,6 @@ case "$sim" in
     # -O2 is NVC's default code generation level, written out so that the
     # record shows it.
     step compile "$tool" "${common[@]}" --work=work:lib/work -L lib -e -O2 "$top"
-    t1="$(now)"
     run=("$tool" "${common[@]}" --work=work:lib/work -L lib -r "$top" --ieee-warnings=off --exit-severity=error)
     ;;
   *)
@@ -152,13 +227,8 @@ case "$sim" in
     exit 2
     ;;
 esac
-compile_s="$(elapsed "$t0" "$t1")"
-
-t0="$(now)"
 status=0
 step run "${run[@]}" > stdout.log 2>&1 || status=$?
-t1="$(now)"
-run_s="$(elapsed "$t0" "$t1")"
 cat stdout.log
 if [[ $status -ne 0 ]]; then
   echo "FAIL: $sim exited with status $status" >&2
@@ -176,6 +246,21 @@ for r in "${rejects[@]}"; do
     exit 1
   fi
 done
-record compile "$compile_s"
-record run "$run_s"
+cycles="$(sed -n -E 's/.*simbench cycles ([1-9][0-9]*)([^0-9.A-Za-z_]|$).*/\1/p' stdout.log | tail -1)"
+if [[ -z "$cycles" ]]; then
+  echo "FAIL: $sim output lacks the testbench's \"simbench cycles <n>\" line, n > 0" >&2
+  exit 1
+fi
+if [[ -n "$timing" ]]; then
+  for s in compile run; do
+    awk -v s="$s" '$1 == s {
+        w += $2; u += $3; y += $4; if ($5 > m) m = $5; n = NF
+      }
+      END {
+        if (n >= 5) printf "%s %.2f %.2f %.2f %d\n", s, w, u, y, m
+        else printf "%s %.3f\n", s, w
+      }' "$work/steps.txt" >> "$timing"
+  done
+  echo "cycles $cycles" >> "$timing"
+fi
 echo "PASS: $sim"
