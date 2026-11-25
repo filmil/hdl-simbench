@@ -35,19 +35,20 @@ coremark_image(
 # the iteration count. A short run always prints "Errors detected", because
 # it runs for less than CoreMark's 10 seconds (of simulated time), so that
 # line is not a failure here; a wrong checksum prints "ERROR! ... crc".
+# Bazel splits test arguments at spaces, so each text is quoted inside.
 _COREMARK_CHECKS = [
     "--expect",
-    "seedcrc          : 0xe9f5",
+    "'seedcrc          : 0xe9f5'",
     "--expect",
-    "[0]crclist       : 0xe714",
+    "'[0]crclist       : 0xe714'",
     "--expect",
-    "[0]crcmatrix     : 0x1fd7",
+    "'[0]crcmatrix     : 0x1fd7'",
     "--expect",
-    "[0]crcstate      : 0x8e3a",
+    "'[0]crcstate      : 0x8e3a'",
     "--expect",
-    "coremark_tb: program done",
+    "'coremark_tb: program done'",
     "--reject",
-    "crc 0x",
+    "'crc 0x'",
 ]
 
 sh_test(
