@@ -81,10 +81,9 @@ sh_test(
     data = [
         ":coremark_1_imem_image",
         ":coremark_tb.vhd",
-        "//third_party/neorv32:rtl",
         "@ghdl//:ghdl_mcode",
         "@ghdl//:vhdl_libs_v08",
-    ],
+    ] + ["//third_party/neorv32:" + f for f in NEORV32_RTL],
     target_compatible_with = [
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",
