@@ -15,7 +15,8 @@ not CoreMark scores.
 Every flag that changes what is built or how it runs is written here and in
 the code that uses it. On each timed run, `vhdl_case.sh --commands <file>`
 also records every simulator command line exactly as it ran, next to the
-timings. Results without that record do not count.
+timings. Under `bazel test`, both records go to the test's undeclared
+outputs as `timing.txt` and `commands.txt`, as for the SystemVerilog cases. Results without that record do not count.
 
 The rule for every simulator: its documented default code generation, with
 no debug, tracing, coverage or waveform options, and with run-time checks
@@ -42,7 +43,7 @@ Source: `coremark.bzl`.
 
 | | |
 |---|---|
-| Build | BCR module `ghdl` 6.0.0.bcr.5, from source; mcode back end |
+| Build | BCR module `ghdl` 6.0.0.bcr.5, from source; mcode back end; Bazel `-c opt` (the repository's `.bazelrc`), not the fastbuild default of `-O0`. The effective flags of GHDL's own C and Ada compiles are listed here once CI has built it (`bazel aquery`) |
 | Analysis | `ghdl -a --std=08 --workdir=lib -Plib --work=<library> <file>` |
 | Run | `ghdl -r --std=08 --workdir=lib -Plib coremark_tb --max-stack-alloc=0 --ieee-asserts=disable --assert-level=error` |
 

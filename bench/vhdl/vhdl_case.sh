@@ -76,6 +76,12 @@ if [[ -z "$sim" || -z "$tool" || -z "$top" || ${#srcs[@]} -eq 0 ]]; then
   exit 2
 fi
 tool="$(abs "$tool")"
+# Under bazel test, the records go to the test's undeclared outputs by
+# default, as rtlmeter_case.sh does, so one driver collects both sides.
+if [[ -n "${TEST_UNDECLARED_OUTPUTS_DIR:-}" ]]; then
+  [[ -z "$timing" ]] && timing="$TEST_UNDECLARED_OUTPUTS_DIR/timing.txt"
+  [[ -z "$commands" ]] && commands="$TEST_UNDECLARED_OUTPUTS_DIR/commands.txt"
+fi
 [[ -n "$timing" ]] && timing="$(abs "$timing")"
 [[ -n "$commands" ]] && commands="$(abs "$commands")"
 
