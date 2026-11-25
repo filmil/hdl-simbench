@@ -18,15 +18,45 @@ CI_MAX_CYCLES = 100000
 # skips the cycle check and the post hook; it must print the harness's
 # "+max_cycles reached" line instead.
 
+# The hermetic C++ compiler (MODULE.bazel: LLVM with a Debian sysroot), for
+# what the simulators compile while a case runs: Verilator's model, and
+# DPI-C sources. The same compiler on every machine, eph2 included, which
+# has none of its own.
+_CXX_ARGS = [
+    "--clangxx",
+    "$(rootpath @llvm_toolchain_llvm//:bin/clang++)",
+    "--sysroot-file",
+    "$(rootpath @sysroot_linux_x86_64//:usr/include/stdio.h)",
+    "--readelf",
+    "$(rootpath @llvm_toolchain_llvm//:bin/llvm-readelf)",
+]
+
+_CXX_DATA = [
+    "@llvm_toolchain_llvm//:bin/clang++",
+    "@llvm_toolchain_llvm//:clang",
+    "@llvm_toolchain_llvm//:include",
+    "@llvm_toolchain_llvm//:ld",
+    "@llvm_toolchain_llvm//:lib",
+    "@sysroot_linux_x86_64//:sysroot",
+    "@sysroot_linux_x86_64//:usr/include/stdio.h",
+    "@llvm_toolchain_llvm//:bin/llvm-readelf",
+]
+
 _SIMULATORS = {
     "verilator": struct(
-        args = ["--tool", "$(rootpath @verilator_prebuilt//:verilator)"],
+        args = [
+            "--tool",
+            "$(rootpath @verilator//:verilator)",
+            "--verilator-root-file",
+            "$(rootpath @verilator//:include/verilated_std.sv)",
+        ] + _CXX_ARGS,
         data = [
-            "@verilator_prebuilt//:includes",
-            "@verilator_prebuilt//:verilator",
-        ],
+            "@verilator//:include/verilated_std.sv",
+            "@verilator//:verilator",
+            "@verilator//:verilator_includes",
+        ] + _CXX_DATA,
         harness = "//third_party/rtlmeter:harness",
-        # The prebuilt Verilator is a Linux x86-64 binary.
+        # The hermetic toolchain's sysroot is Linux x86-64.
         compatible = [
             "@platforms//cpu:x86_64",
             "@platforms//os:linux",
@@ -36,15 +66,23 @@ _SIMULATORS = {
         smoke_cycles = 20000,
     ),
     "xezim": struct(
-        args = ["--tool", "$(rootpath @xezim//:xezim)"],
-        data = ["@xezim//:xezim"],
+        # Rust's standard library on linux-gnu links libgcc_s for unwinding,
+        # so xezim needs it from the host; see README.md, "Flags".
+        args = [
+            "--tool",
+            "$(rootpath @xezim//:xezim)",
+            "--allow-host-lib",
+            "libgcc_s.so.1",
+        ] + _CXX_ARGS,
+        data = ["@xezim//:xezim"] + _CXX_DATA,
         # The original harness: xezim follows IEEE 1800, $root included.
         harness = "//third_party/rtlmeter:harness",
         compatible = [
             "@platforms//cpu:x86_64",
             "@platforms//os:linux",
         ],
-        # Compiles DPI-C sources itself, with the host compiler.
+        # Compiles DPI-C sources itself when the design runs, with $CXX/$CC
+        # (the hermetic clang that rtlmeter_case.sh sets up).
         cpp = True,
         # xezim runs VeeR-EL2 at a few hundred cycles a second in CI: its
         # hiperf hello took 171 s with the compile, and 5000 cycles over
@@ -61,11 +99,14 @@ _SIMULATORS = {
             "$(rootpath @iverilog//:vvp)",
             "--ivl-base",
             "$(rootpath @iverilog//:ivl_base)",
+            "--readelf",
+            "$(rootpath @llvm_toolchain_llvm//:bin/llvm-readelf)",
         ],
         data = [
             "@iverilog",
             "@iverilog//:ivl_base",
             "@iverilog//:vvp",
+            "@llvm_toolchain_llvm//:bin/llvm-readelf",
         ],
         # Icarus has no $root (see //bench:harness_noroot).
         harness = "//bench:harness_noroot",

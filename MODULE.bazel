@@ -11,21 +11,14 @@ bazel_dep(name = "rules_shell", version = "0.8.0")
 
 # SystemVerilog simulators.
 
-# Verilator, from a prebuilt binary (filmil/bazel_toolchains_verilator), so
-# that no build compiles Verilator itself. The bench calls the binary
-# directly; it does not use rules_verilator's rules. The binary exists for
-# Linux x86-64 only.
-bazel_dep(name = "bazel_toolchains_verilator", version = "0.1.0")
-
-verilator_binary = use_extension(
-    "@bazel_toolchains_verilator//verilator:extension.bzl",
-    "verilator_binary",
-)
-use_repo(verilator_binary, "verilator_prebuilt")
+# Verilator, built from source by its BCR module with the hermetic toolchain
+# below: the same compiler as everything else, and no unattested prebuilt
+# binary (filmil/bazel_toolchains_verilator#3).
+bazel_dep(name = "verilator", version = "5.046.bcr.6")
 
 # xezim, a SystemVerilog simulator in Rust, built from source by its module in
 # filmil/bazel-registry (Rust, opt build). Linux x86-64 only.
-bazel_dep(name = "xezim", version = "0.11.7")
+bazel_dep(name = "xezim", version = "0.11.7.bcr.1")
 
 # Icarus Verilog, built from source by its BCR module.
 bazel_dep(name = "iverilog", version = "13.0.bcr.1")
@@ -48,6 +41,69 @@ pip.parse(
 )
 use_repo(pip, "pypi")
 
+# A hermetic C/C++ toolchain: LLVM's release build, with a Debian sysroot
+# (glibc 2.31), so that every machine compiles with the same compiler and
+# libraries. It builds Verilator and Icarus, and it compiles Verilator's model
+# and DPI-C sources in the bench (bench/rtlmeter_case.sh). xezim's module
+# builds xezim with its own copy of the same LLVM release and sysroot, not
+# registered. eph2, where the timed runs happen, has no compiler or C library
+# headers of its own.
+bazel_dep(name = "toolchains_llvm", version = "1.13.0")
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+# Chromium's Debian bullseye amd64 sysroot, as listed in Chromium's
+# build/linux/sysroot_scripts/sysroots.json (the file name is its SHA-256).
+http_archive(
+    name = "sysroot_linux_x86_64",
+    build_file_content = """
+filegroup(
+    name = "sysroot",
+    # What a compiler and linker read: headers, libraries, startup files.
+    srcs = glob(
+        [
+            "usr/include/**",
+            "usr/lib/**",
+            "lib/x86_64-linux-gnu/**",
+            "lib64/**",
+        ],
+        exclude = [
+            "**/* *",
+            "usr/lib/systemd/**",
+        ],
+    ),
+    visibility = ["//visibility:public"],
+)
+
+# A file in the sysroot (usr/include/stdio.h), from whose path the runner
+# derives the sysroot: three directories up.
+exports_files(["usr/include/stdio.h"])
+""",
+    sha256 = "f851add76bdae472fb6c94b4f920bc4a132d85ac607951391297f636af7e934e",
+    # The URL has no extension: it is the tarball's SHA-256.
+    type = "tar.xz",
+    urls = ["https://commondatastorage.googleapis.com/chrome-linux-sysroot/f851add76bdae472fb6c94b4f920bc4a132d85ac607951391297f636af7e934e"],
+)
+
+llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
+llvm.toolchain(
+    name = "llvm_toolchain",
+    llvm_version = "23.1.5",
+    # The C++ library is LLVM's libc++, with libc++abi, libunwind and
+    # compiler-rt, all linked statically (the module's default,
+    # "builtin-libc++"), so a built binary needs only glibc from the host.
+    # The sysroot has no static libstdc++. Some modules rely on headers that
+    # libstdc++ includes by the way; .bazelrc adds those.
+)
+llvm.sysroot(
+    name = "llvm_toolchain",
+    label = "@sysroot_linux_x86_64//:sysroot",
+    targets = ["linux-x86_64"],
+)
+use_repo(llvm, "llvm_toolchain", "llvm_toolchain_llvm")
+
+register_toolchains("@llvm_toolchain//:all")
+
 # VHDL simulators.
 
 # GHDL, built from source by its BCR module, with its mcode back end: GHDL's
@@ -67,8 +123,6 @@ bazel_dep(name = "rules_cc", version = "0.2.28")
 # (riscv-none-elf-gcc). The sha256 below is the one xPack publishes in
 # xpack-riscv-none-elf-gcc-15.2.0-1-linux-x64.tar.gz.sha next to the archive,
 # and GitHub's own digest of the archive matches it. Linux x86-64 only.
-http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
 http_archive(
     name = "riscv_gcc",
     build_file = "//bench/vhdl:riscv_gcc.BUILD.bazel",
