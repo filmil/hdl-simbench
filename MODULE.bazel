@@ -103,3 +103,40 @@ llvm.sysroot(
 use_repo(llvm, "llvm_toolchain", "llvm_toolchain_llvm")
 
 register_toolchains("@llvm_toolchain//:all")
+
+# VHDL simulators.
+
+# GHDL, built from source by its BCR module, with its mcode back end: GHDL's
+# default on x86-64, which compiles the design in memory when it starts.
+# The module's other back end, llvm-jit, needs llvm-project built from
+# source. GHDL's Ada parts use the GNAT that rules_ada 0.3.0 pins by default:
+# GNAT 16.1.0 from periareon/hermetic-gnat 2026.09.30, whose published
+# .sha256 (f5094291...306d) matches GitHub's digest of the archive and
+# rules_ada's pinned integrity.
+bazel_dep(name = "ghdl", version = "6.0.0.bcr.5")
+
+# The module compiles GHDL's Ada at GCC's default -O0. The patch adds
+# upstream's release flags, -O -gnatn (see the patch's header).
+single_version_override(
+    module_name = "ghdl",
+    # The patch is written against this version.
+    version = "6.0.0.bcr.5",
+    patch_strip = 1,
+    patches = ["//bench/vhdl:ghdl_ada_opt.patch"],
+)
+
+# C, for NEORV32's image_gen tool.
+bazel_dep(name = "rules_cc", version = "0.2.28")
+
+# The RISC-V GCC that builds the programs NEORV32 runs (CoreMark). It is the
+# xPack build of GCC 15.2.0 with newlib, as NEORV32's own makefiles expect
+# (riscv-none-elf-gcc). The sha256 below is the one xPack publishes in
+# xpack-riscv-none-elf-gcc-15.2.0-1-linux-x64.tar.gz.sha next to the archive,
+# and GitHub's own digest of the archive matches it. Linux x86-64 only.
+http_archive(
+    name = "riscv_gcc",
+    build_file = "//bench/vhdl:riscv_gcc.BUILD.bazel",
+    sha256 = "aaaa8060c914851a3e5ee1ba82cc3d6f80972f90638a05c6e823a37557a33758",
+    strip_prefix = "xpack-riscv-none-elf-gcc-15.2.0-1",
+    urls = ["https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v15.2.0-1/xpack-riscv-none-elf-gcc-15.2.0-1-linux-x64.tar.gz"],
+)

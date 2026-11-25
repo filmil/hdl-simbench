@@ -1,0 +1,126 @@
+// ================================================================================ //
+// The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              //
+// Copyright (c) NEORV32 contributors.                                              //
+// Copyright (c) Stephan Nolting. All rights reserved.                              //
+// Licensed under the BSD-3-Clause license, see LICENSE for details.                //
+// SPDX-License-Identifier: BSD-3-Clause                                            //
+// ================================================================================ //
+
+/**
+ * @file neorv32_pwm.c
+ * @brief Pulse-Width Modulation Controller (PWM) HW driver source file.
+ */
+
+#include <neorv32.h>
+
+/**********************************************************************//**
+ * Check if PWM unit was synthesized.
+ * @return 0 if PWM was not synthesized, non-zero if PWM is available.
+ **************************************************************************/
+int neorv32_pwm_available(void) {
+
+  return(int)((NEORV32_SYSINFO->SOC >> SYSINFO_SOC_IO_PWM) & 1U);
+}
+
+/**********************************************************************//**
+ * Get number of implemented PWM channels.
+ * @return Number of implemented PWM channels (0..32).
+ **************************************************************************/
+int neorv32_pwm_get_num_channels(void) {
+
+  uint32_t backup = NEORV32_PWM->POLARITY;
+  NEORV32_PWM->POLARITY = -1;
+  uint32_t tmp = NEORV32_PWM->POLARITY;
+
+  uint32_t i = 0, cnt = 0;
+  for (i=0; i<32; i++) {
+    cnt += tmp & 1U;
+    tmp >>= 1;
+  }
+
+  NEORV32_PWM->POLARITY = backup;
+
+  return (int)cnt;
+}
+
+/**********************************************************************//**
+ * Set global PWM counter clock prescaler.
+ * @param[in] prsc Clock prescaler select (0..7). See #NEORV32_CLOCK_PRSC_enum.
+ **************************************************************************/
+void neorv32_pwm_set_clock(int prsc) {
+
+  NEORV32_PWM->CLKPRSC = prsc;
+}
+
+/**********************************************************************//**
+ * Enable PWM channel using bit mask.
+ * @param[in] mask Channel bit mask.
+ **************************************************************************/
+void neorv32_pwm_ch_enable_mask(uint32_t mask) {
+
+  NEORV32_PWM->ENABLE |= mask;
+}
+
+/**********************************************************************//**
+ * Disable PWM channel using bit mask.
+ * @param[in] mask Channel bit mask.
+ **************************************************************************/
+void neorv32_pwm_ch_disable_mask(uint32_t mask) {
+
+  NEORV32_PWM->ENABLE &= ~mask;
+}
+
+/**********************************************************************//**
+ * Enable individual PWM channel.
+ * @param[in] ch Channel select (0..31).
+ **************************************************************************/
+void neorv32_pwm_ch_enable_single(int ch) {
+
+  NEORV32_PWM->ENABLE |= (uint32_t)(1U << (ch & 31U));
+}
+
+/**********************************************************************//**
+ * Disable individual PWM channel using bit mask.
+ * @param[in] ch Channel select (0..31).
+ **************************************************************************/
+void neorv32_pwm_ch_disable_single(int ch) {
+
+  NEORV32_PWM->ENABLE &= ~(uint32_t)(1U << (ch & 31U));
+}
+
+/**********************************************************************//**
+ * Configure a single channel's wrap value and polarity.
+ * @param[in] ch Channel select (0..31).
+ * @param[in] top Wrap value for PWM counter (16-bit).
+ * @param[in] pol Polarity of PWM output (0 = normal, 1 = inverse).
+ * @param[in] mode Operation mode (0 = fast-PWM, 1 = phase-correct PWM).
+ **************************************************************************/
+void neorv32_pwm_ch_setup(int ch, int top, int pol, int mode) {
+
+  ch &= 31U;
+  uint32_t mask = 1U << ch;
+
+  if (pol) {
+    NEORV32_PWM->POLARITY |= mask;
+  } else {
+    NEORV32_PWM->POLARITY &= ~mask;
+  }
+
+  if (mode) {
+    NEORV32_PWM->MODE |= mask;
+  } else {
+    NEORV32_PWM->MODE &= ~mask;
+  }
+
+  NEORV32_PWM->CHANNEL[ch].TOP = top;
+}
+
+/**********************************************************************//**
+ * Set PWM channel's duty cycle.
+ * @param[in] ch Channel select (0..31).
+ * @param[in] duty Duty cycle (16-bit).
+ **************************************************************************/
+void neorv32_pwm_ch_set_duty(int ch, int duty) {
+
+  NEORV32_PWM->CHANNEL[ch & 31U].CMP = duty;
+}

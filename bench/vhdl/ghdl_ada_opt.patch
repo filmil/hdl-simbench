@@ -1,0 +1,35 @@
+GHDL's release build optimizes its Ada code (Makefile.in, --disable-checks:
+OPT_FLAGS+=-O, ADA_FLAGS+=-gnatp -gnatn). The BCR module 6.0.0.bcr.5 passes
+-gnatp but no -O, and rules_ada adds no optimization level, so its Ada is
+compiled at GCC's default -O0. This adds upstream's -O -gnatn to every Ada
+target.
+
+--- a/BUILD.bazel
++++ b/BUILD.bazel
+@@ -441,6 +441,8 @@
+     "-fPIC",
+     "-w",
+     "-gnatp",
++    "-O",
++    "-gnatn",
+ ]
+ 
+ ada_library(
+@@ -536,6 +538,8 @@
+         "-gnat12",
+         "-w",
+         "-gnatp",
++        "-O",
++        "-gnatn",
+     ],
+     # Upstream links every simulator binary with `-shared-libgcc` so that
+     # JIT-generated code and dlopen'd VPI/VHPI plugins share one unwinder with
+@@ -593,6 +597,8 @@
+         "-gnat12",
+         "-w",
+         "-gnatp",
++        "-O",
++        "-gnatn",
+     ],
+     # Without this the dylib/so only links thanks to lazy binding and fails
+     # at dlopen time (e.g. from pyGHDL) unless the host already loaded a

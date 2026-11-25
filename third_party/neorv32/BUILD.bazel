@@ -1,0 +1,57 @@
+# NEORV32 (https://github.com/stnolting/neorv32), a RISC-V processor in
+# VHDL, BSD-3-Clause (LICENSE here). Copied from tag v1.13.8 (commit
+# 8feec14e7773a3b1112b6f9d8073af08fb50458c), unchanged:
+#   rtl/core/              the processor
+#   rtl/file_list_core.f   the analysis order of rtl/core
+#   sw/common, sw/lib      start-up code, linker script and drivers
+#   sw/example/coremark    the CoreMark port (its CoreMark submodule is
+#                          //third_party/coremark)
+#   sw/image_gen           the tool that turns a program into a VHDL ROM
+
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load(":rtl.bzl", "NEORV32_RTL")
+
+package(default_visibility = ["//visibility:public"])
+
+licenses(["notice"])
+
+exports_files(["LICENSE"])
+
+# The processor's VHDL, for library neorv32. Each file is exported so that
+# a case can pass them in NEORV32_RTL's order (rtl.bzl).
+filegroup(
+    name = "rtl",
+    srcs = NEORV32_RTL,
+)
+
+exports_files(NEORV32_RTL)
+
+filegroup(
+    name = "sw_lib_srcs",
+    srcs = glob(["sw/lib/source/*.c"]),
+)
+
+filegroup(
+    name = "sw_lib_hdrs",
+    srcs = glob(["sw/lib/include/*.h"]),
+)
+
+exports_files([
+    "sw/common/crt0.S",
+    "sw/common/neorv32.ld",
+])
+
+filegroup(
+    name = "coremark_port",
+    srcs = [
+        "sw/example/coremark/core_portme.c",
+        "sw/example/coremark/core_portme.h",
+    ],
+)
+
+# Turns a raw program image into the VHDL package neorv32_imem_image.
+# Built for the exec platform with the registered C toolchain.
+cc_binary(
+    name = "image_gen",
+    srcs = ["sw/image_gen/image_gen.c"],
+)

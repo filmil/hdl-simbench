@@ -1,0 +1,120 @@
+# VHDL cases: NEORV32 running CoreMark, under GHDL (and NVC, once its
+# binary is attested). Correctness first: each simulator must print
+# CoreMark's known checksums before any of its timings count. Timed runs use
+# the same script, vhdl_case.sh.
+
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//third_party/neorv32:rtl.bzl", "NEORV32_RTL")
+load(":coremark.bzl", "coremark_image")
+
+exports_files([
+    "coremark_tb.vhd",
+    "riscv_gcc.BUILD.bazel",
+    "vhdl_case.sh",
+])
+
+# NEORV32's CoreMark port fixes the iteration count at 2000, far too many to
+# simulate. This copy of its core_portme.h, made from the unchanged
+# third-party file, lets each image set ITERATIONS; the check fails if the
+# line it replaces ever changes.
+genrule(
+    name = "core_portme_h",
+    srcs = ["//third_party/neorv32:sw/example/coremark/core_portme.h"],
+    outs = ["portme/core_portme.h"],
+    cmd = "sed -e 's/^#define ITERATIONS (2000)$$/#ifndef ITERATIONS\\n#define ITERATIONS (2000)\\n#endif/' $< > $@ && grep -q '^#ifndef ITERATIONS$$' $@",
+)
+
+# core_portme.c, unchanged, next to the patched header: its own
+# #include "core_portme.h" looks in its directory first, so there it finds
+# the patched header and never the unchanged one.
+genrule(
+    name = "core_portme_c",
+    srcs = ["//third_party/neorv32:sw/example/coremark/core_portme.c"],
+    outs = ["portme/core_portme.c"],
+    cmd = "cp $< $@",
+)
+
+# One CoreMark iteration takes NEORV32 about a million cycles, so the test
+# image runs one. The timed runs' image and its count come with them.
+coremark_image(
+    name = "coremark_1",
+    iterations = 1,
+)
+
+# CoreMark's checksums for its performance run (seeds 0, 0, 0x66; 2000 bytes
+# of data). seedcrc, crclist, crcmatrix and crcstate are from the known-CRC
+# tables in core_main.c and do not depend on the iteration count; they cover
+# the first iteration only. crcfinal covers every iteration, so it depends on
+# the count: 0xe714 for one iteration, from the same sources built for the
+# host with ITERATIONS=1 (whose other checksums match the tables). A short
+# run always prints "Errors detected", because it runs for less than
+# CoreMark's 10 seconds (of simulated time), so that line is not a failure
+# here; a wrong checksum prints "ERROR! ... crc".
+# Bazel splits test arguments at spaces, so each text is quoted inside.
+_COREMARK_1_CHECKS = [
+    "--expect",
+    "'Iterations       : 1'",
+    "--expect",
+    "'[0]crcfinal      : 0xe714'",
+    "--expect",
+    "'seedcrc          : 0xe9f5'",
+    "--expect",
+    "'[0]crclist       : 0xe714'",
+    "--expect",
+    "'[0]crcmatrix     : 0x1fd7'",
+    "--expect",
+    "'[0]crcstate      : 0x8e3a'",
+    "--expect",
+    "'coremark_tb: program done'",
+    "--reject",
+    "'crc 0x'",
+]
+
+sh_test(
+    name = "coremark_ghdl_test",
+    size = "large",
+    srcs = ["vhdl_case.sh"],
+    args = [
+        "--sim",
+        "ghdl",
+        "--tool",
+        "$(rootpath @ghdl//:ghdl_mcode)",
+        "--top",
+        "coremark_tb",
+    ] + _COREMARK_1_CHECKS + [
+        # do not sort: the files are analysed in this order.
+        "--",
+        # The program's image is a package that neorv32_imem uses, so it is
+        # analysed into library neorv32 before the processor.
+        "@lib=neorv32",
+        "$(rootpath :coremark_1_imem_image)",
+    ] + [
+        "$(rootpath //third_party/neorv32:%s)" % f
+        for f in NEORV32_RTL
+    ] + [
+        "@lib=work",
+        "$(rootpath :coremark_tb.vhd)",
+        "@ghdl-libs",
+        "$(rootpaths @ghdl//:vhdl_libs_v08)",
+    ],
+    data = [
+        ":coremark_1_imem_image",
+        ":coremark_tb.vhd",
+        "@ghdl//:ghdl_mcode",
+        "@ghdl//:vhdl_libs_v08",
+    ] + ["//third_party/neorv32:" + f for f in NEORV32_RTL],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# vhdl_case.sh itself, with a stub simulator: the recorded commands, one
+# command per library, and no timings for a failed run.
+sh_test(
+    name = "vhdl_case_test",
+    size = "small",
+    srcs = ["vhdl_case_test.sh"],
+    args = ["$(rootpath :vhdl_case.sh)"],
+    data = [":vhdl_case.sh"],
+)

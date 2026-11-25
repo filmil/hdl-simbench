@@ -1,0 +1,23 @@
+# The xPack RISC-V GCC (riscv-none-elf), as unpacked. The bench calls its
+# drivers directly from genrules; it is not a registered C toolchain.
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "bin/riscv-none-elf-gcc",
+    "bin/riscv-none-elf-objcopy",
+])
+
+# Everything the drivers load at run time: cc1, as, ld, the newlib and libgcc
+# archives, and their shared libraries.
+filegroup(
+    name = "all",
+    srcs = glob(
+        ["**"],
+        exclude = [
+            "share/doc/**",
+            "share/info/**",
+            "share/man/**",
+        ],
+    ),
+)
