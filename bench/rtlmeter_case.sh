@@ -125,14 +125,14 @@ incdir="$work/verilogIncludeFiles"
 # Under "bazel test", the default is timing.txt among the test's undeclared
 # outputs (bazel-testlogs/<test>/test.outputs/), which //bench:timed_runs reads.
 [[ -z "$timing" && -n "${SIMBENCH_TIMING:-}" ]] && timing="$(abs "$SIMBENCH_TIMING")"
-[[ -z "$timing" && -n "${TEST_UNDECLARED_OUTPUTS_DIR:-}" ]] && timing="$TEST_UNDECLARED_OUTPUTS_DIR/timing.txt"
+[[ -z "$timing" && -n "${TEST_UNDECLARED_OUTPUTS_DIR:-}" ]] && timing="$(abs "$TEST_UNDECLARED_OUTPUTS_DIR")/timing.txt"
 [[ -n "$timing" ]] && : > "$timing"
 # Commands. Every command a step runs is appended to the commands file, one
 # line each, "<step> <argv, shell-quoted>", in the format of
 # bench/vhdl/vhdl_case.sh: --commands, else commands.txt next to the
 # timing file under "bazel test". The compiler wrappers' full command lines
 # come first, as steps "cxx" and "cc".
-[[ -z "$commands" && -n "${TEST_UNDECLARED_OUTPUTS_DIR:-}" ]] && commands="$TEST_UNDECLARED_OUTPUTS_DIR/commands.txt"
+[[ -z "$commands" && -n "${TEST_UNDECLARED_OUTPUTS_DIR:-}" ]] && commands="$(abs "$TEST_UNDECLARED_OUTPUTS_DIR")/commands.txt"
 [[ -n "$commands" ]] && : > "$commands"
 log_command() {
   [[ -n "$commands" ]] || return 0
@@ -167,12 +167,12 @@ if [[ -n "$clangxx" ]]; then
   # <sysroot>/usr/include/stdio.h
   sysroot="$(dirname "$(dirname "$(dirname "$sysrootfile")")")"
   clang="$(dirname "$clangxx")/clang"
-  printf '#!/bin/sh\nexec "%s" --sysroot="%s" -stdlib=libc++ -fuse-ld=lld -static-libstdc++ "$@"\n' \
+  printf '#!/bin/sh\nexec "%s" --sysroot="%s" -stdlib=libc++ -fuse-ld=lld -static-libstdc++ -Wno-unused-command-line-argument "$@"\n' \
     "$clangxx" "$sysroot" > "$work/cxx"
-  printf '#!/bin/sh\nexec "%s" --sysroot="%s" -fuse-ld=lld "$@"\n' "$clang" "$sysroot" > "$work/cc"
+  printf '#!/bin/sh\nexec "%s" --sysroot="%s" -fuse-ld=lld -Wno-unused-command-line-argument "$@"\n' "$clang" "$sysroot" > "$work/cc"
   chmod +x "$work/cxx" "$work/cc"
-  log_command cxx "$clangxx" --sysroot="$sysroot" -stdlib=libc++ -fuse-ld=lld -static-libstdc++ "<args>"
-  log_command cc "$clang" --sysroot="$sysroot" -fuse-ld=lld "<args>"
+  log_command cxx "$clangxx" --sysroot="$sysroot" -stdlib=libc++ -fuse-ld=lld -static-libstdc++ -Wno-unused-command-line-argument "<args>"
+  log_command cc "$clang" --sysroot="$sysroot" -fuse-ld=lld -Wno-unused-command-line-argument "<args>"
   export CXX="$work/cxx" CC="$work/cc"
 else
   # GCC needs these; clang turns coroutines on with -std=c++20 and inlines

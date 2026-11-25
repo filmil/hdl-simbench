@@ -71,7 +71,8 @@ _SIMULATORS = {
             "@platforms//cpu:x86_64",
             "@platforms//os:linux",
         ],
-        # Compiles DPI-C sources itself, with the host compiler.
+        # Compiles DPI-C sources itself when the design runs, with $CXX/$CC
+        # (the hermetic clang that rtlmeter_case.sh sets up).
         cpp = True,
         # xezim runs VeeR-EL2 at a few hundred cycles a second in CI: its
         # hiperf hello took 171 s with the compile, and 5000 cycles over

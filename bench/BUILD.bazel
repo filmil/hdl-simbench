@@ -67,3 +67,11 @@ sh_binary(
     name = "timed_runs",
     srcs = ["timed_runs.sh"],
 )
+
+sh_test(
+    name = "timed_runs_test",
+    size = "small",
+    srcs = ["timed_runs_test.sh"],
+    args = ["$(rootpath timed_runs.sh)"],
+    data = ["timed_runs.sh"],
+)

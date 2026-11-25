@@ -43,9 +43,11 @@ use_repo(pip, "pypi")
 
 # A hermetic C/C++ toolchain: LLVM's release build, with a Debian sysroot
 # (glibc 2.31), so that every machine compiles with the same compiler and
-# libraries. It builds Icarus and xezim, and it compiles Verilator's model and
-# xezim's DPI-C sources in the bench (bench/rtlmeter_case.sh). eph2, where the
-# timed runs happen, has no compiler or C library headers of its own.
+# libraries. It builds Verilator and Icarus, and it compiles Verilator's model
+# and DPI-C sources in the bench (bench/rtlmeter_case.sh). xezim's module
+# builds xezim with its own copy of the same LLVM release and sysroot, not
+# registered. eph2, where the timed runs happen, has no compiler or C library
+# headers of its own.
 bazel_dep(name = "toolchains_llvm", version = "1.13.0")
 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
@@ -73,7 +75,8 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
-# A file at the sysroot's root, whose directory is the sysroot.
+# A file in the sysroot (usr/include/stdio.h), from whose path the runner
+# derives the sysroot: three directories up.
 exports_files(["usr/include/stdio.h"])
 """,
     sha256 = "f851add76bdae472fb6c94b4f920bc4a132d85ac607951391297f636af7e934e",

@@ -11,11 +11,12 @@ Work in progress; see https://github.com/filmil/hdl-simbench/issues/1.
   Icarus Verilog (13.0), xezim (0.11.7.bcr.1, from filmil/bazel-registry).
 - VHDL: GHDL, NVC.
 
-All C and C++ is compiled by one hermetic toolchain: clang 23.1.5 with
+All C and C++ is compiled by one hermetic compiler: clang 23.1.5 with
 Chromium's Debian bullseye sysroot (glibc 2.31), registered for the whole
-build. That covers the simulators themselves (xezim's C code and link
-included), the C++ model Verilator writes for each case, and DPI-C sources.
-The bench needs no compiler on the machine it runs on.
+build. It builds Verilator and Icarus, and compiles the C++ model Verilator
+writes for each case and DPI-C sources. xezim's module builds xezim's C code
+and link with its own copy of the same LLVM release and sysroot. The bench
+needs no compiler on the machine it runs on.
 
 Only open-source simulators are reported. Commercial simulator licenses
 commonly forbid publishing benchmark results; Vivado's, for one, does
@@ -52,6 +53,9 @@ memory of each step (Verilator's translation, the compile, the run), the
 cycles simulated and cycles per second, and the machine's state around the
 run (load average before, during and after; how busy the pinned core, its
 hyperthread sibling and the other cores were; CPU steal).
+
+The host needs `taskset` (util-linux) and GNU time as `/usr/bin/time`;
+without GNU time the user, system and peak memory columns are empty.
 
 ```
 bazel build //bench:timed_runs
@@ -92,8 +96,8 @@ Verilator's model and DPI-C sources, through wrappers recorded as steps
 
 | | |
 |---|---|
-| C++ | `clang++ --sysroot=<sysroot> -stdlib=libc++ -fuse-ld=lld -static-libstdc++` |
-| C | `clang --sysroot=<sysroot> -fuse-ld=lld` |
+| C++ | `clang++ --sysroot=<sysroot> -stdlib=libc++ -fuse-ld=lld -static-libstdc++ -Wno-unused-command-line-argument` |
+| C | `clang --sysroot=<sysroot> -fuse-ld=lld -Wno-unused-command-line-argument` |
 
 ### Verilator
 
