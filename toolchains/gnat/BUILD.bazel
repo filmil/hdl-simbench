@@ -26,6 +26,20 @@ _SYSROOT = "external/+http_archive+sysroot_linux_x86_64"
 # the link; lld does not.
 _LLVM_BIN = "external/toolchains_llvm++llvm+llvm_toolchain_llvm/bin"
 
+# These two are Bazel's canonical repository names, which ada_args cannot
+# compute (it takes plain strings). If one goes stale, gcc ignores the -B
+# directory, and the link fails, or uses another lld; hello_test checks
+# that lld linked the binary against glibc 2.31 or older, so either shows.
+# The toolchain also names GNAT 16.1.0 and rules_ada's version setting: if
+# rules_ada's default GNAT changed, this toolchain would stop matching and
+# rules_ada's own would link against the host, which hello_test and
+# coremark_ghdl_test's binary check would both reject.
+
+_LINUX_X86_64 = [
+    "@platforms//cpu:x86_64",
+    "@platforms//os:linux",
+]
+
 ada_args(
     name = "sysroot",
     actions = LINK_ACTIONS,
@@ -44,7 +58,9 @@ ada_args(
         "-Wl,-rpath-link=" + _SYSROOT + "/usr/lib/x86_64-linux-gnu",
     ],
     data = [
+        # ld.lld is a symbolic link to lld.
         "@llvm_toolchain_llvm//:bin/ld.lld",
+        "@llvm_toolchain_llvm//:bin/lld",
         "@sysroot_linux_x86_64//:sysroot",
     ],
 )
@@ -59,6 +75,7 @@ genrule(
     srcs = ["@gnat_linux_x86_64//:lib/gcc/x86_64-pc-linux-gnu/16.1.0/adalib/libgnat.a"],
     outs = ["glibc231/libgnat.a"],
     cmd = "$(execpath @llvm_toolchain_llvm//:bin/llvm-objcopy) --redefine-sym fcntl64=fcntl $< $@",
+    target_compatible_with = _LINUX_X86_64,
     tools = ["@llvm_toolchain_llvm//:bin/llvm-objcopy"],
 )
 
@@ -92,6 +109,7 @@ toolchain(
         "@platforms//cpu:x86_64",
         "@platforms//os:linux",
     ],
+    target_compatible_with = _LINUX_X86_64,
     target_settings = ["@rules_ada//ada/settings:version_16.1.0"],
     toolchain = ":gnat_16_1_0",
     toolchain_type = "@rules_ada//ada:toolchain_type",
@@ -115,9 +133,13 @@ sh_test(
     args = [
         "$(rootpath :hello)",
         "$(rootpath @llvm_toolchain_llvm//:bin/llvm-readelf)",
+        "$(rootpath :libgnat_glibc231)",
+        "$(rootpath @llvm_toolchain_llvm//:bin/llvm-nm)",
     ],
     data = [
         ":hello",
+        ":libgnat_glibc231",
+        "@llvm_toolchain_llvm//:bin/llvm-nm",
         "@llvm_toolchain_llvm//:bin/llvm-readelf",
     ],
     target_compatible_with = [

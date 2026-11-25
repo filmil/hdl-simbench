@@ -48,6 +48,7 @@ Source: `coremark.bzl`.
 |---|---|
 | Build | BCR module `ghdl` 6.0.0.bcr.5, from source, mcode back end, with `ghdl.patch` (optimization; static libstdc++) |
 | Ada (GNAT 16.1.0) | `-gnat12 -fPIC -w -gnatp -O -gnatn` |
+| Ada link | `//toolchains/gnat`: GNAT 16.1.0 with LLVM's lld, against the bullseye sysroot (glibc 2.31), and a copy of `libgnat.a` that calls `fcntl` for `fcntl64` |
 | C and C++ (clang 23.1.5) | `-O2 -g0 -DNDEBUG -ffunction-sections -fdata-sections -fstack-protector-strong -D_FORTIFY_SOURCE=1 -fno-omit-frame-pointer`, from Bazel `-c opt` (the repository's `.bazelrc`) |
 | Analysis | `ghdl -a --std=08 --workdir=lib -Plib --work=<library> <file>` |
 | Run | `ghdl -r --std=08 --workdir=lib -Plib coremark_tb --max-stack-alloc=0 --ieee-asserts=disable --assert-level=error` |

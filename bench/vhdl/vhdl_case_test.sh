@@ -25,7 +25,10 @@ if [[ "$1" == -d ]]; then
   for n in $NEEDED; do echo " 0x0000000000000001 (NEEDED) Shared library: [$n]"; done
 elif [[ "$1" == -V ]]; then
   for v in $VERSIONS; do echo "  0x0010:   Name: $v  Flags: none  Version: 2"; done
+elif [[ "$1" == --dyn-syms ]]; then
+  for v in $VERSIONS; do echo "     1: 0000000000000000     0 FUNC    GLOBAL DEFAULT   UND sym_${v#GLIBC_}@$v (2)"; done
 fi
+[[ -z "${READELF_FAIL:-}" ]]
 STUB
 chmod +x readelf.sh
 chmod +x stub.sh
@@ -47,7 +50,7 @@ want c1 "run $w/stub.sh -r --std=08 --workdir=lib -Plib top --max-stack-alloc=0 
 [[ "$(cut -d' ' -f1 t1 | tr '\n' ' ')" == "compile run cycles " ]] || fail "t1: $(cat t1)"
 want t1 "cycles 42"
 # With /usr/bin/time, each step has wall, user, system and max RSS.
-if [[ -x /usr/bin/time ]]; then
+if [[ -x /usr/bin/time ]] && /usr/bin/time -f %e -a -o /dev/null true 2> /dev/null; then
   awk '$1 != "cycles" && NF != 5 { exit 1 }' t1 || fail "t1 steps lack fields: $(cat t1)"
 fi
 
@@ -77,6 +80,18 @@ grep -q "^host-lib $w/stub.sh libgcc_s.so.1 " c7 || { cat c7 >&2; fail "c7 lacks
 NEEDED="libc.so.6" VERSIONS="GLIBC_2.2.5 GLIBC_2.31" bash "$case_sh" --sim ghdl \
   --tool stub.sh --top top --readelf readelf.sh --commands c8 "${files[@]}" > /dev/null
 want c8 "elf $w/stub.sh NEEDED:\\ libc.so.6 GLIBC:\\ 2.31"
+# The failure names the symbols that need the newer glibc.
+if NEEDED="libc.so.6" VERSIONS="GLIBC_2.2.5 GLIBC_2.34" bash "$case_sh" --sim ghdl \
+  --tool stub.sh --top top --readelf readelf.sh "${files[@]}" > /dev/null 2> e10; then
+  fail "a binary needing GLIBC_2.34 passed"
+fi
+grep -qF "sym_2.34@GLIBC_2.34" e10 || { cat e10 >&2; fail "the failure does not name the symbol"; }
+grep -qF "sym_2.2.5@" e10 && fail "the failure names a symbol old enough"
+# A readelf that fails fails the case.
+if READELF_FAIL=1 NEEDED="libc.so.6" bash "$case_sh" --sim ghdl --tool stub.sh --top top \
+  --readelf readelf.sh "${files[@]}" > /dev/null 2>&1; then
+  fail "a failing readelf passed"
+fi
 for v in GLIBC_2.34 GLIBC_PRIVATE GLIBC_ABI_DT_RELR; do
   if NEEDED="libc.so.6" VERSIONS="GLIBC_2.2.5 $v" bash "$case_sh" --sim ghdl \
     --tool stub.sh --top top --readelf readelf.sh "${files[@]}" > /dev/null 2>&1; then
