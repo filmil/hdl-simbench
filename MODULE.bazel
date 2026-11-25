@@ -109,11 +109,19 @@ register_toolchains("@llvm_toolchain//:all")
 # GHDL, built from source by its BCR module, with its mcode back end: GHDL's
 # default on x86-64, which compiles the design in memory when it starts.
 # The module's other back end, llvm-jit, needs llvm-project built from
-# source. GHDL's Ada parts use the GNAT that rules_ada pins: GNAT 15.3.0 from
-# periareon/hermetic-gnat 2026.09.30, whose published .sha256
-# (36603b28...0aec) matches GitHub's digest of the archive and rules_ada's
-# pinned integrity.
+# source. GHDL's Ada parts use the GNAT that rules_ada 0.3.0 pins by default:
+# GNAT 16.1.0 from periareon/hermetic-gnat 2026.09.30, whose published
+# .sha256 (f5094291...306d) matches GitHub's digest of the archive and
+# rules_ada's pinned integrity.
 bazel_dep(name = "ghdl", version = "6.0.0.bcr.5")
+
+# The module compiles GHDL's Ada at GCC's default -O0. The patch adds
+# upstream's release flags, -O -gnatn (see the patch's header).
+single_version_override(
+    module_name = "ghdl",
+    patch_strip = 1,
+    patches = ["//bench/vhdl:ghdl_ada_opt.patch"],
+)
 
 # C, for NEORV32's image_gen tool.
 bazel_dep(name = "rules_cc", version = "0.2.28")

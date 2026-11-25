@@ -43,9 +43,18 @@ Source: `coremark.bzl`.
 
 | | |
 |---|---|
-| Build | BCR module `ghdl` 6.0.0.bcr.5, from source; mcode back end; Bazel `-c opt` (the repository's `.bazelrc`), not the fastbuild default of `-O0`. The effective flags of GHDL's own C and Ada compiles are listed here once CI has built it (`bazel aquery`) |
+| Build | BCR module `ghdl` 6.0.0.bcr.5, from source, mcode back end, with `ghdl_ada_opt.patch` |
+| Ada (GNAT 16.1.0) | `-gnat12 -fPIC -w -gnatp -O -gnatn` |
+| C and C++ (clang 23.1.5) | `-O2 -g0 -DNDEBUG -ffunction-sections -fdata-sections -fstack-protector-strong -D_FORTIFY_SOURCE=1 -fno-omit-frame-pointer`, from Bazel `-c opt` (the repository's `.bazelrc`) |
 | Analysis | `ghdl -a --std=08 --workdir=lib -Plib --work=<library> <file>` |
 | Run | `ghdl -r --std=08 --workdir=lib -Plib coremark_tb --max-stack-alloc=0 --ieee-asserts=disable --assert-level=error` |
+
+The flags above are read from `bazel aquery` of `@ghdl//:ghdl_mcode`.
+Without the patch, the module compiles GHDL's Ada with no `-O`, and
+rules_ada ignores `-c opt`, so GHDL itself ran at `-O0`. The patch adds
+`-O -gnatn`, the flags of GHDL's own release build (`Makefile.in` with
+`--disable-checks`). Its `-gnatp` (no run-time checks) is the module's
+and matches that build.
 
 mcode has no optimization levels: it generates the design's machine code in
 memory when `ghdl -r` starts, so that time counts as "run". The run options
