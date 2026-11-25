@@ -8,7 +8,9 @@
 \documentclass[11pt]{article}
 \usepackage[margin=2cm]{geometry}
 \usepackage{graphicx}
-\usepackage{pdflscape}
+% lscape, not pdflscape, which the hermetic TinyTeX lacks: the landscape
+% pages are set sideways on portrait pages.
+\usepackage{lscape}
 
 \input{version}
 
