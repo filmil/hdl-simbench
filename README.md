@@ -74,6 +74,23 @@ bazel-bin/bench/timed_runs --core 2 --repeats 5 --out results.csv \
     //third_party/rtlmeter/designs/Example:kind_hello_verilator_test
 ```
 
+## Which runs count
+
+Fixed on 2026-11-25, before any VeeR-EL2 result was seen, and applied
+unchanged to all data:
+
+- A run is dropped if its CSV row has `sibling_busy_pct` over 25 (the
+  pinned core's hyperthread sibling was busy) or `steal_pct` over 1.
+- Each cell (simulator, design, case, step) reports the median of its kept
+  runs, with their minimum and maximum.
+- Next to "compile" and "run", each cell reports "total": compile plus run
+  (plus "verilate" for Verilator) of the same run. For short simulations
+  the total decides which simulator is faster.
+- If more than a third of a cell's runs are dropped, the cell gets more
+  runs instead of a median of what is left.
+- Runs that fail are not timed results; a cell with a failing run is
+  reported as failing.
+
 ## Flags
 
 Every flag that changes what is built or how it runs is written here and in
