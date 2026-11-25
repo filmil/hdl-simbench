@@ -31,6 +31,9 @@
 # +max_cycles: the throughput runs, the same cap for every simulator.
 # Each run's commands.txt is copied to <out>.commands/, and the row names it.
 #
+# Each row also names the workspace's git commit, whether its tracked files
+# were changed (dirty), and the SHA-256 of MODULE.bazel.lock.
+#
 # It stops before a run if the file system holding the Bazel output base has
 # under --min-free-gb free (default 15).
 set -euo pipefail
@@ -149,8 +152,15 @@ sibling="$(expand_cpulist < "$SYSFS_CPU/cpu$core/topology/thread_siblings_list" 
   grep -v -x "$core" | head -1 || true)"
 host="$(hostname -s)"
 
+# What was measured: the workspace's commit, whether tracked files differ
+# from it (untracked files such as user.bazelrc do not count), and the
+# lockfile's SHA-256. Every row carries them.
+git_commit="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+git_dirty="$(if [[ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]]; then echo dirty; else echo clean; fi)"
+lock_sha256="$(sha256sum MODULE.bazel.lock | cut -d' ' -f1)"
+
 if [[ ! -s "$out" ]]; then
-  echo "utc_start,host,simulator,simulator_version,design,case,target,repeat,status,max_cycles,commands_file,cycles,cycles_per_s,verilate_wall_s,verilate_user_s,verilate_sys_s,verilate_maxrss_kib,compile_wall_s,compile_user_s,compile_sys_s,compile_maxrss_kib,run_wall_s,run_user_s,run_sys_s,run_maxrss_kib,core,load1_before,load1_max_during,load1_after,core_busy_pct,sibling_busy_pct,others_busy_pct,steal_pct" > "$out"
+  echo "utc_start,host,simulator,simulator_version,design,case,target,repeat,status,max_cycles,commands_file,cycles,cycles_per_s,verilate_wall_s,verilate_user_s,verilate_sys_s,verilate_maxrss_kib,compile_wall_s,compile_user_s,compile_sys_s,compile_maxrss_kib,run_wall_s,run_user_s,run_sys_s,run_maxrss_kib,core,load1_before,load1_max_during,load1_after,core_busy_pct,sibling_busy_pct,others_busy_pct,steal_pct,git_commit,git_dirty,lock_sha256" > "$out"
 fi
 
 # Build options only: "bazel info" rejects test options.
@@ -233,7 +243,7 @@ for target in "${targets[@]}"; do
     fi
     run_wall="${x%%,*}"
     cps="$(awk -v n="$cycles" -v t="$run_wall" 'BEGIN { if (n ~ /^[0-9]+$/ && t > 0) printf "%.1f", n / t }')"
-    echo "$start,$host,$sim,${version[$sim]:-},$design,$case_,$target,$r,$status,$max_cycles,$cmdfile,$cycles,$cps,$v,$c,$x,$core,$l_before,$l_max,$l_after,$core_pct,$sib_pct,$oth_pct,$steal" >> "$out"
+    echo "$start,$host,$sim,${version[$sim]:-},$design,$case_,$target,$r,$status,$max_cycles,$cmdfile,$cycles,$cps,$v,$c,$x,$core,$l_before,$l_max,$l_after,$core_pct,$sib_pct,$oth_pct,$steal,$git_commit,$git_dirty,$lock_sha256" >> "$out"
     echo "$target run $r: $status, ${run_wall:-?} s run, ${cycles:-?} cycles, load $l_before/$l_max/$l_after" >&2
   done
 done
