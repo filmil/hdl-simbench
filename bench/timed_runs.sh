@@ -155,12 +155,25 @@ host="$(hostname -s)"
 # What was measured: the workspace's commit, whether tracked files differ
 # from it (untracked files such as user.bazelrc do not count), and the
 # lockfile's SHA-256. Every row carries them.
-git_commit="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
-git_dirty="$(if [[ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]]; then echo dirty; else echo clean; fi)"
-lock_sha256="$(sha256sum MODULE.bazel.lock | cut -d' ' -f1)"
+# Taken again before each run.
+provenance() {
+  local st
+  git_commit="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+  if st="$(git status --porcelain --untracked-files=no 2>/dev/null)"; then
+    if [[ -n "$st" ]]; then git_dirty=dirty; else git_dirty=clean; fi
+  else
+    git_dirty=unknown
+  fi
+  lock_sha256="$(sha256sum MODULE.bazel.lock 2>/dev/null | cut -d' ' -f1)"
+  lock_sha256="${lock_sha256:-unknown}"
+}
 
+header="utc_start,host,simulator,simulator_version,design,case,target,repeat,status,max_cycles,commands_file,cycles,cycles_per_s,verilate_wall_s,verilate_user_s,verilate_sys_s,verilate_maxrss_kib,compile_wall_s,compile_user_s,compile_sys_s,compile_maxrss_kib,run_wall_s,run_user_s,run_sys_s,run_maxrss_kib,core,load1_before,load1_max_during,load1_after,core_busy_pct,sibling_busy_pct,others_busy_pct,steal_pct,git_commit,git_dirty,lock_sha256"
 if [[ ! -s "$out" ]]; then
-  echo "utc_start,host,simulator,simulator_version,design,case,target,repeat,status,max_cycles,commands_file,cycles,cycles_per_s,verilate_wall_s,verilate_user_s,verilate_sys_s,verilate_maxrss_kib,compile_wall_s,compile_user_s,compile_sys_s,compile_maxrss_kib,run_wall_s,run_user_s,run_sys_s,run_maxrss_kib,core,load1_before,load1_max_during,load1_after,core_busy_pct,sibling_busy_pct,others_busy_pct,steal_pct,git_commit,git_dirty,lock_sha256" > "$out"
+  echo "$header" > "$out"
+elif [[ "$(head -1 "$out")" != "$header" ]]; then
+  echo "$out has other columns (an older driver's); write to a new file" >&2
+  exit 2
 fi
 
 # Build options only: "bazel info" rejects test options.
@@ -208,6 +221,7 @@ for target in "${targets[@]}"; do
     samples="$(mktemp)"
     ( while :; do load1 >> "$samples"; sleep 2; done ) &
     sampler=$!
+    provenance
     start="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     l_before="$(load1)"
     before="$(snapshot "$core" "$sibling")"

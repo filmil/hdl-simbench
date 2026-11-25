@@ -32,7 +32,7 @@ py_test(
 )
 
 # Summarizes //bench:timed_runs CSV files by README.md's "Which runs count":
-#   bazel run //tools:summarize_runs -- $PWD/results/slot1.csv
+#   bazel run //tools:summarize_runs -- results/slot1.csv
 py_library(
     name = "summarize_runs_lib",
     srcs = ["summarize_runs.py"],
