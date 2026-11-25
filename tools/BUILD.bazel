@@ -37,6 +37,7 @@ py_library(
     name = "summarize_runs_lib",
     srcs = ["summarize_runs.py"],
     imports = ["."],
+    visibility = ["//results:__pkg__"],
 )
 
 py_binary(

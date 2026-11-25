@@ -1,0 +1,5 @@
+host,simulator,simulator_version,design,case,max_cycles,state,runs,kept,cycles,resolution_limited,compile_s,compile_s_min,compile_s_max,run_s,run_s_min,run_s_max,total_s,total_s_min,total_s_max,cycles_per_s,cycles_per_s_min,cycles_per_s_max,run_maxrss_kib,run_maxrss_kib_min,run_maxrss_kib_max,git_commit,git_dirty,lock_sha256
+i7-7700,xezim,0.11.7.bcr.1,VeeR-EL2,hiperf_cmark,10000,ok,3,2,10000,False,3.66,3.59,3.73,603.19,560.61,645.77,606.85,564.34,649.36,16.65,15.5,17.8,378518.0,378516.0,378520.0,6d74d4c,clean,495d331e97a3
+i7-7700,verilator,5.046.bcr.6,VeeR-EL2,asic_cmark,10000,ok,3,2,10000,True,67.67,67.11,68.23,0.3,0.3,0.3,67.97,67.41,68.53,33333.3,33333.3,33333.3,11072.0,11008.0,11136.0,6d74d4c,clean,495d331e97a3
+i7-7700,verilator,5.046.bcr.6,VeeR-EL2,asic_cmark,,ok,3,2,2276050,False,74.775,69.94,79.61,68.315,67.96,68.67,143.08999999999997,137.89999999999998,148.28,33317.9,33144.8,33491.0,11072.0,11008.0,11136.0,6d74d4c,clean,495d331e97a3
+i7-7700,ghdl,6.0.0.bcr.5,vhdl,coremark,,ok,5,5,1252946,False,0.07,0.07,0.1,268.88,252.61,281.81,268.95,252.68,281.89,4659.9,4446.1,4960.0,212032.0,211908.0,212096.0,6d74d4c,clean,495d331e97a3
