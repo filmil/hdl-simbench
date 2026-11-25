@@ -30,11 +30,12 @@ entity coremark_tb is
 end entity;
 
 architecture sim of coremark_tb is
+  constant CLOCK_PERIOD : time := 10 ns; -- 100 MHz
   signal clk  : std_ulogic := '0';
   signal rstn : std_ulogic := '0';
   signal gpio : std_ulogic_vector(31 downto 0);
 begin
-  clk  <= not clk after 5 ns; -- 100 MHz
+  clk  <= not clk after CLOCK_PERIOD / 2;
   rstn <= '1' after 100 ns;
 
   dut: entity neorv32.neorv32_top
@@ -64,6 +65,9 @@ begin
   begin
     wait until gpio(0) = '1';
     report "coremark_tb: program done at " & time'image(now);
+    -- Clock cycles simulated, for the bench's cycles-per-second figure
+    -- (vhdl_case.sh reads this line).
+    report "simbench cycles " & integer'image(now / CLOCK_PERIOD);
     finish;
   end process;
 

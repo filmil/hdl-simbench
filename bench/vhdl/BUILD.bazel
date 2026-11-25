@@ -66,6 +66,8 @@ _COREMARK_1_CHECKS = [
     "'[0]crcstate      : 0x8e3a'",
     "--expect",
     "'coremark_tb: program done'",
+    "--expect",
+    "'simbench cycles '",
     "--reject",
     "'crc 0x'",
 ]
@@ -81,6 +83,8 @@ sh_test(
         "$(rootpath @ghdl//:ghdl_mcode)",
         "--top",
         "coremark_tb",
+        "--readelf",
+        "$(rootpath @llvm_toolchain_llvm//:bin/llvm-readelf)",
     ] + _COREMARK_1_CHECKS + [
         # do not sort: the files are analysed in this order.
         "--",
@@ -102,6 +106,7 @@ sh_test(
         ":coremark_tb.vhd",
         "@ghdl//:ghdl_mcode",
         "@ghdl//:vhdl_libs_v08",
+        "@llvm_toolchain_llvm//:bin/llvm-readelf",
     ] + ["//third_party/neorv32:" + f for f in NEORV32_RTL],
     target_compatible_with = [
         "@platforms//os:linux",

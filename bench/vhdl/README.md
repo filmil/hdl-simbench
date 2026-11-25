@@ -77,6 +77,15 @@ it runs.
 "compile" and "run" split the work differently per simulator (see
 `vhdl_case.sh`), so the sum of the two is the comparable number. Analysis
 runs one simulator command per library, with that library's files in
-order, so process start-up is not counted once per file. Each
+order, so process start-up is not counted once per file.
+
+Timed runs use `//bench:timed_runs`, as for the SystemVerilog cases, for
+example `bazel-bin/bench/timed_runs --core 2 --repeats 5 --out vhdl.csv
+//bench/vhdl:coremark_ghdl_test`. Each step's wall, user and system time
+and peak memory come from `/usr/bin/time`; the cycles are the clock cycles
+the testbench simulated (its "simbench cycles" line), so cycles per second
+of "run" can be compared across simulators. The simulator binary may take
+only glibc from the host (`--readelf`); its NEEDED list is in the command
+record. Each
 timed run also records the machine, the simulator's version and the
 command lines.

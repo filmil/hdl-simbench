@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Tests vhdl_case.sh with a stub simulator: the commands it records for
-# GHDL and NVC, grouping of files per library, and that a failed check
-# writes no timings.
+# GHDL and NVC, grouping of files per library, the timing record (steps
+# and cycles), the host-library check, and that a failed check writes no
+# timings.
 set -euo pipefail
 
 case_sh="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
@@ -14,8 +15,16 @@ mkdir -p p/std/v08
 touch p/std/v08/std-obj08.cf a.vhd b.vhd c.vhd
 cat > stub.sh <<'STUB'
 #!/usr/bin/env bash
-case " $* " in *" -r "*) echo "hello OK" ;; esac
+case " $* " in *" -r "*) echo "hello OK"; echo "tb.vhd:1:1:(report note): simbench cycles 42" ;; esac
 STUB
+# A readelf that reports the NEEDED list in $NEEDED.
+cat > readelf.sh <<'STUB'
+#!/usr/bin/env bash
+if [[ "$1" == -d ]]; then
+  for n in $NEEDED; do echo " 0x0000000000000001 (NEEDED) Shared library: [$n]"; done
+fi
+STUB
+chmod +x readelf.sh
 chmod +x stub.sh
 unset TEST_UNDECLARED_OUTPUTS_DIR
 
@@ -32,7 +41,12 @@ want c1 "env GHDL_PREFIX=$w/p"
 want c1 "compile $w/stub.sh -a --std=08 --workdir=lib -Plib --work=neo $w/a.vhd $w/b.vhd"
 want c1 "compile $w/stub.sh -a --std=08 --workdir=lib -Plib --work=work $w/c.vhd"
 want c1 "run $w/stub.sh -r --std=08 --workdir=lib -Plib top --max-stack-alloc=0 --ieee-asserts=disable --assert-level=error"
-[[ "$(cut -d' ' -f1 t1 | tr '\n' ' ')" == "compile run " ]] || fail "t1: $(cat t1)"
+[[ "$(cut -d' ' -f1 t1 | tr '\n' ' ')" == "compile run cycles " ]] || fail "t1: $(cat t1)"
+want t1 "cycles 42"
+# With /usr/bin/time, each step has wall, user, system and max RSS.
+if [[ -x /usr/bin/time ]]; then
+  awk '$1 != "cycles" && NF != 5 { exit 1 }' t1 || fail "t1 steps lack fields: $(cat t1)"
+fi
 
 bash "$case_sh" --sim nvc --tool stub.sh --top top --expect "hello OK" \
   --timing t2 --commands c2 "${files[@]}" > /dev/null
@@ -40,7 +54,19 @@ want c2 "compile $w/stub.sh --std=2008 --work=neo:lib/neo -L lib -a $w/a.vhd $w/
 want c2 "compile $w/stub.sh --std=2008 --work=work:lib/work -L lib -a $w/c.vhd"
 want c2 "compile $w/stub.sh --std=2008 --work=work:lib/work -L lib -e -O2 top"
 want c2 "run $w/stub.sh --std=2008 --work=work:lib/work -L lib -r top --ieee-warnings=off --exit-severity=error"
-[[ "$(cut -d' ' -f1 t2 | tr '\n' ' ')" == "compile run " ]] || fail "t2: $(cat t2)"
+[[ "$(cut -d' ' -f1 t2 | tr '\n' ' ')" == "compile run cycles " ]] || fail "t2: $(cat t2)"
+
+# The host-library check: glibc passes, anything else fails unless allowed.
+NEEDED="libc.so.6 libm.so.6" bash "$case_sh" --sim ghdl --tool stub.sh --top top \
+  --readelf readelf.sh --commands c5 "${files[@]}" > /dev/null
+want c5 "elf $w/stub.sh NEEDED:\\ libc.so.6\\ libm.so.6 GLIBC:\\ none"
+if NEEDED="libc.so.6 libgcc_s.so.1" bash "$case_sh" --sim ghdl --tool stub.sh \
+  --top top --readelf readelf.sh --timing t6 "${files[@]}" > /dev/null 2>&1; then
+  fail "a binary needing the host's libgcc_s passed"
+fi
+[[ ! -e t6 ]] || fail "a failed host-library check wrote timings"
+NEEDED="libc.so.6 libgcc_s.so.1" bash "$case_sh" --sim ghdl --tool stub.sh --top top \
+  --readelf readelf.sh --allow-host-lib libgcc_s.so.1 "${files[@]}" > /dev/null
 
 # A missing expected line or a rejected one fails the case and writes no
 # timings.
