@@ -66,14 +66,9 @@ _SIMULATORS = {
         smoke_cycles = 20000,
     ),
     "xezim": struct(
-        # Rust's standard library on linux-gnu links libgcc_s for unwinding,
-        # so xezim needs it from the host; see README.md, "Flags".
-        args = [
-            "--tool",
-            "$(rootpath @xezim//:xezim)",
-            "--allow-host-lib",
-            "libgcc_s.so.1",
-        ] + _CXX_ARGS,
+        # xezim 0.11.7.bcr.2 links LLVM's libunwind statically, so, like the
+        # other simulators, it needs nothing from the host but glibc.
+        args = ["--tool", "$(rootpath @xezim//:xezim)"] + _CXX_ARGS,
         data = ["@xezim//:xezim"] + _CXX_DATA,
         # The original harness: xezim follows IEEE 1800, $root included.
         harness = "//third_party/rtlmeter:harness",

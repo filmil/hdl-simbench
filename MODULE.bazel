@@ -18,7 +18,7 @@ bazel_dep(name = "verilator", version = "5.046.bcr.6")
 
 # xezim, a SystemVerilog simulator in Rust, built from source by its module in
 # filmil/bazel-registry (Rust, opt build). Linux x86-64 only.
-bazel_dep(name = "xezim", version = "0.11.7.bcr.1")
+bazel_dep(name = "xezim", version = "0.11.7.bcr.2")
 
 # Icarus Verilog, built from source by its BCR module.
 bazel_dep(name = "iverilog", version = "13.0.bcr.1")

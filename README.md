@@ -10,7 +10,7 @@ Work in progress; see https://github.com/filmil/hdl-simbench/issues/1.
 ## What is compared
 
 - SystemVerilog: Verilator (5.046, built from source by its BCR module),
-  Icarus Verilog (13.0), xezim (0.11.7.bcr.1, from filmil/bazel-registry).
+  Icarus Verilog (13.0), xezim (0.11.7.bcr.2, from filmil/bazel-registry).
 - VHDL: GHDL, NVC.
 
 All C and C++ is compiled by one hermetic compiler: clang 23.1.5 with
@@ -23,10 +23,10 @@ needs no compiler on the machine it runs on.
 The C++ library is LLVM's libc++, with libc++abi, libunwind and
 compiler-rt, all linked statically. So the SystemVerilog simulators'
 binaries and the Verilator models need nothing from the host but glibc
-2.31 or older, with one exception: xezim needs `libgcc_s.so.1` (see
-"Flags", xezim). Each SystemVerilog case checks the binaries it runs
+2.31 or older. Each SystemVerilog case checks the binaries it runs
 (`check_elf` in `bench/rtlmeter_case.sh`): every library they need must be
-one of glibc's, or named as an exception. It records their NEEDED lists,
+one of glibc's, unless a simulator names an exception (`--allow-host-lib`;
+none does). It records their NEEDED lists,
 the newest glibc version they need, and the host's `ldd` output with the
 case's command lines. Not checked: the DPI-C library xezim compiles while
 a case runs, and the VHDL simulators, whose cases `bench/vhdl/` runs.
@@ -179,15 +179,15 @@ cases with C++ sources are not run on it.
 
 | | |
 |---|---|
-| Build | filmil/bazel-registry module `xezim` 0.11.7.bcr.1, from source, optimized (its module builds it so) |
+| Build | filmil/bazel-registry module `xezim` 0.11.7.bcr.2, from source, optimized (its module builds it so) |
 | compile | `xezim --no-cache --compile -o design.xzc -s <top> +incdir+<dir>`, the case's `+define+` and `-g/<top>/<name>=<value>` |
 | run | `xezim --no-cache design.xzc <DPI-C sources> <plusargs>` |
 
-Caveat: xezim needs `libgcc_s.so.1` from the host. Rust's standard library
-on linux-gnu links it for stack unwinding, and that cannot be changed from
-outside xezim's build. It is the one host library besides glibc that any
-timed binary needs; each run records which file it was (its path and
-SHA-256, step `host-lib` in the commands record).
+xezim 0.11.7.bcr.2 links LLVM's libunwind statically in place of the
+host's `libgcc_s.so.1`, which Rust's standard library otherwise needs
+for unwinding. Campaign 1 (`results/20261125/`) used 0.11.7.bcr.1, which
+still took `libgcc_s.so.1` from the host; each of its xezim runs records
+the file (step `host-lib`).
 
 `--no-cache`: xezim otherwise caches elaborated designs in `~/.cache`, and
 a cached compile would not be timed. Strict IEEE 1800 (no `--relax-*`
