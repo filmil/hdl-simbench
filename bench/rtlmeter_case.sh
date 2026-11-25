@@ -34,12 +34,15 @@
 #       [--timing <file>] [--commands <file>]
 #       [--readelf <llvm-readelf>] (checks the simulator's binaries: see
 #                   check_elf)
+#       [--allow-host-lib <soname>]... (a host runtime library a binary may
+#                   need after all; README.md, "Flags", says why)
 #       -- <source files>...
 
 set -euo pipefail
 
 sim="" tool="" tool2="" vroot="" ivlbase="" top="" cycles="" timing="" posthook="" smoke="" tolerance=0
 commands="" readelf=""
+allowed=()
 clangxx="" sysrootfile=""
 defines=() params=() vargs=() plusargs=() expects=() includes=() files=() cpps=()
 while [[ $# -gt 0 ]]; do
@@ -68,6 +71,7 @@ while [[ $# -gt 0 ]]; do
     --timing) timing="$2"; shift 2 ;;
     --commands) commands="$2"; shift 2 ;;
     --readelf) readelf="$2"; shift 2 ;;
+    --allow-host-lib) allowed+=("$2"); shift 2 ;;
     --) shift; break ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -158,6 +162,17 @@ check_elf() {
     ldd "$bin" 2>&1 | while IFS= read -r l; do log_command ldd "$bin" "$l"; done
   fi
   bad="$(tr ' ' '\n' <<<"$needed" | grep -E '^lib(stdc\+\+|c\+\+|c\+\+abi|gcc_s|unwind)\.so' || true)"
+  # An allowed host library is recorded with the host file's path and
+  # SHA-256, so that every run says which one it used.
+  local a lib path
+  for a in "${allowed[@]}"; do
+    if grep -q -x -F "$a" <<<"$bad"; then
+      bad="$(grep -v -x -F "$a" <<<"$bad" || true)"
+      path="$(ldd "$bin" 2>/dev/null | awk -v l="$a" '$1 == l { print $3 }')"
+      lib="$(sha256sum "$path" 2>/dev/null | cut -d' ' -f1)"
+      log_command host-lib "$bin" "$a" "${path:-?}" "sha256:${lib:-?}"
+    fi
+  done
   if [[ -n "$bad" ]]; then
     echo "FAIL: $bin needs a C++ or GCC runtime from the host: $bad" >&2
     exit 1

@@ -144,6 +144,12 @@ cases with C++ sources are not run on it.
 | compile | `xezim --no-cache --compile -o design.xzc -s <top> +incdir+<dir>`, the case's `+define+` and `-g/<top>/<name>=<value>` |
 | run | `xezim --no-cache design.xzc <DPI-C sources> <plusargs>` |
 
+Caveat: xezim needs `libgcc_s.so.1` from the host. Rust's standard library
+on linux-gnu links it for stack unwinding, and that cannot be changed from
+outside xezim's build. It is the one host library besides glibc that any
+timed binary needs; each run records which file it was (its path and
+SHA-256, step `host-lib` in the commands record).
+
 `--no-cache`: xezim otherwise caches elaborated designs in `~/.cache`, and
 a cached compile would not be timed. Strict IEEE 1800 (no `--relax-*`
 option). Caveat: xezim has no optimization levels; it simulates on one
