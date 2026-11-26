@@ -1,0 +1,92 @@
+== nvc ... -e (with stats)
+== args: --std=2008 -L <execroot>/bazel-out/k8-opt/bin/bench/vhdl/coremark_nvc_test.runfiles/_main/../+http_archive+nvc_linux_x86_64/lib/nvc --work=work:lib/work -L lib -e -V --stats -O2 coremark_tb
+** Note: initialising [2ms +20224kB]
+** Note: loading top-level unit [0ms +512kB]
+
+Design Unit                                         Instances     Unique
+NEORV32.NEORV32_PRIM_FIFO-NEORV32_PRIM_FIFO_RTL             4          2
+NEORV32.NEORV32_PRIM_SPRAM-NEORV32_PRIM_SPRAM_RTL           4          1
+NEORV32.NEORV32_PRIM_CNT-NEORV32_PRIM_CNT_RTL               3          1
+NEORV32.NEORV32_CPU_FRONTEND-NEORV32_CPU_FRONTEND_RTL          1          1
+NEORV32.NEORV32_CPU_REGFILE-NEORV32_CPU_REGFILE_RTL          1          1
+NEORV32.NEORV32_CPU_LSU-NEORV32_CPU_LSU_RTL                 1          1
+NEORV32.NEORV32_CPU_ALU_MULDIV-NEORV32_CPU_ALU_MULDIV_RTL          1          1
+NEORV32_DMEM                                                1          1
+NEORV32.NEORV32_CPU_CONTROL-NEORV32_CPU_CONTROL_RTL          1          1
+NEORV32.NEORV32_UART-NEORV32_UART_RTL                       1          1
+NEORV32.NEORV32_IMEM-NEORV32_IMEM_RTL                       1          1
+NEORV32_CLINT_MTIMECMP                                      1          1
+NEORV32.NEORV32_SYS_CLOCK-NEORV32_SYS_CLOCK_RTL             1          1
+NEORV32.NEORV32_SYSINFO-NEORV32_SYSINFO_RTL                 1          1
+NEORV32.NEORV32_TOP-NEORV32_TOP_RTL                         1          1
+NEORV32.NEORV32_CLINT_MTIMECMP-NEORV32_CLINT_MTIMECMP_RTL          1          1
+NEORV32.NEORV32_CPU_ALU-NEORV32_CPU_ALU_RTL                 1          1
+NEORV32.NEORV32_IMEM_ROM-NEORV32_IMEM_ROM_RTL               1          1
+NEORV32.NEORV32_BUS_IO_SWITCH-NEORV32_BUS_IO_SWITCH_RTL          1          1
+NEORV32.NEORV32_BUS_GATEWAY-NEORV32_BUS_GATEWAY_RTL          1          1
+NEORV32.NEORV32_CPU_DECOMPRESSOR-NEORV32_CPU_DECOMPRESSOR_RTL          1          1
+NEORV32.NEORV32_CPU_ALU_SHIFTER-NEORV32_CPU_ALU_SHIFTER_RTL          1          1
+NEORV32.NEORV32_BUS_REG-NEORV32_BUS_REG_RTL                 1          1
+NEORV32.NEORV32_CPU_COUNTERS-NEORV32_CPU_COUNTERS_RTL          1          1
+NEORV32.NEORV32_DMEM-NEORV32_DMEM_RTL                       1          1
+NEORV32.NEORV32_CLINT-NEORV32_CLINT_RTL                     1          1
+NEORV32.NEORV32_BUS_SWITCH-NEORV32_BUS_SWITCH_RTL           1          1
+NEORV32.NEORV32_GPIO-NEORV32_GPIO_RTL                       1          1
+NEORV32.NEORV32_SYS_RESET-NEORV32_SYS_RESET_RTL             1          1
+NEORV32.NEORV32_CPU-NEORV32_CPU_RTL                         1          1
+WORK.COREMARK_TB-SIM                                        1          1
+NEORV32.NEORV32_CORE_COMPLEX-NEORV32_CORE_COMPLEX_RTL          1          1
+NEORV32_CPU_REGFILE                                         1          1
+NEORV32_IMEM                                                1          1
+NEORV32_IMEM_ROM                                            1          1
+NEORV32.NEORV32_PRIM_MUL-NEORV32_PRIM_MUL_RTL               1          1
+
+** Note: elaborating design [269ms +70264kB]
+** Note: saving library [2ms +0kB]
+== wall 0.28 s, user 0.24 s, sys 0.03 s, maxrss 91000 KiB
+== nvc ... -r (with stats)
+== args: --std=2008 -L <execroot>/bazel-out/k8-opt/bin/bench/vhdl/coremark_nvc_test.runfiles/_main/../+http_archive+nvc_linux_x86_64/lib/nvc --work=work:lib/work -L lib -r --stats coremark_tb --ieee-warnings=off --exit-severity=error
+** Note: 0ms+0: [NEORV32] The NEORV32 RISC-V Processor (v01.13.08.00), github.com/stnolting/neorv32
+   Process :coremark_tb:dut:config_checks:_p0 at <execroot>/bazel-out/k8-opt/bin/bench/vhdl/coremark_nvc_test.runfiles/_main/third_party/neorv32/rtl/core/neorv32_top.vhd:403
+** Note: 0ms+0: [NEORV32] Processor Configuration: CPU (single-core) IMEM-ROM DMEM CLINT GPIO UART0 SYSINFO 
+   Process :coremark_tb:dut:config_checks:_p1 at <execroot>/bazel-out/k8-opt/bin/bench/vhdl/coremark_nvc_test.runfiles/_main/third_party/neorv32/rtl/core/neorv32_top.vhd:412
+** Warning: 0ms+0: [NEORV32] Assuming this is a simulation.
+   Process :coremark_tb:dut:config_checks:_p2 at <execroot>/bazel-out/k8-opt/bin/bench/vhdl/coremark_nvc_test.runfiles/_main/third_party/neorv32/rtl/core/neorv32_top.vhd:449
+** Note: 0ms+0: [NEORV32] BOOT_MODE_SELECT 2 - booting IMEM image
+   Process :coremark_tb:dut:config_checks:_p6 at <execroot>/bazel-out/k8-opt/bin/bench/vhdl/coremark_nvc_test.runfiles/_main/third_party/neorv32/rtl/core/neorv32_top.vhd:461
+** Note: 0ms+0: [NEORV32] CPU ISA: rv32icmx_zca_zicntr_zicsr_zifencei_zkt
+   Process :coremark_tb:dut:core_complex_gen(0):core_complex_inst:cpu_inst:hello_neorv32:_p0 at <execroot>/bazel-out/k8-opt/bin/bench/vhdl/coremark_nvc_test.runfiles/_main/third_party/neorv32/rtl/core/neorv32_cpu.vhd:161
+** Note: 0ms+0: [NEORV32] CPU tuning options: fast_mul fast_mul_regs=1 fast_shift rf_arch=sram_sync 
+   Process :coremark_tb:dut:core_complex_gen(0):core_complex_inst:cpu_inst:hello_neorv32:_p2 at <execroot>/bazel-out/k8-opt/bin/bench/vhdl/coremark_nvc_test.runfiles/_main/third_party/neorv32/rtl/core/neorv32_cpu.vhd:210
+
+CoreMark on NEORV32 (v1.13.8.0)
+
+Processor clock = 100000000 Hz
+Running coremark (1 iterations)...
+
+2K performance run parameters for coremark.
+CoreMark Size    : 666
+Total ticks      : 1058659
+Total time (secs): 0.000000
+ERROR! Must execute for at least 10 secs for a valid result!
+Iterations       : 1
+Compiler version : GCC15.2.0
+Compiler flags   : -march=rv32imc_zicsr_zifencei -mabi=ilp32 -O3 -Wall -Wextra -ffunction-sections -fdata-sections -mno-fdiv -mstrict-align -mbranch-cost=10 -ffp-contract=off
+Memory location  : STATIC
+seedcrc          : 0xe9f5
+[0]crclist       : 0xe714
+[0]crcmatrix     : 0x1fd7
+[0]crcstate      : 0x8e3a
+[0]crcfinal      : 0xe714
+Errors detected
+
+Execution completed.
+** Note: 12529465ns+2: coremark_tb: program done at 12529465000000 fs
+   Process :coremark_tb:done at <execroot>/bazel-out/k8-opt/bin/bench/vhdl/coremark_nvc_test.runfiles/_main/bench/vhdl/coremark_tb.vhd:64
+** Note: 12529465ns+2: simbench cycles 1252946
+   Process :coremark_tb:done at <execroot>/bazel-out/k8-opt/bin/bench/vhdl/coremark_nvc_test.runfiles/_main/bench/vhdl/coremark_tb.vhd:64
+** Note: 12529465ns+2: FINISH called
+   Procedure FINISH [] at lib/std.08/env-body.vhd:42
+   Process :coremark_tb:done at <execroot>/bazel-out/k8-opt/bin/bench/vhdl/coremark_nvc_test.runfiles/_main/bench/vhdl/coremark_tb.vhd:73
+** Note: setup:91ms run:59538ms user:59515ms sys:14ms maxrss:101408kB static:3432kB
+== wall 59.64 s, user 59.59 s, sys 0.03 s, maxrss 101408 KiB

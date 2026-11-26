@@ -112,6 +112,22 @@ other_cpus() {
     END { print l }' "$PROC_STAT"
 }
 
+# A module's version, from its bazel_dep line in the MODULE.bazel file $2.
+dep_version() {
+  awk -v name="$1" '$0 ~ "^bazel_dep\\(name = \"" name "\", version = \"" {
+      split($0, f, "\""); print f[4]; exit }' "$2"
+}
+
+# The version of an http_archive simulator $1 ("nvc"), from its pinned
+# directory name <simulator>-<version>-linux-x86_64 in the MODULE.bazel
+# file $2.
+archive_version() {
+  awk -v name="$1" '$1 == "strip_prefix" {
+      v = $0; sub(/^[^"]*"/, "", v); sub(/".*$/, "", v)
+      if (index(v, name "-") == 1 && v ~ /-linux-x86_64$/) {
+        v = substr(v, length(name) + 2); sub(/-linux-x86_64$/, "", v); print v; exit } }' "$2"
+}
+
 # Sourced by the test with TIMED_RUNS_LIB=1: the helpers only.
 [[ -n "${TIMED_RUNS_LIB:-}" ]] && return 0
 
@@ -142,17 +158,22 @@ done
 [[ -f MODULE.bazel ]] || { echo "run from the workspace directory" >&2; exit 2; }
 for t in "${targets[@]}"; do parse_label "$t" > /dev/null; done
 
-# The simulators' versions, from MODULE.bazel.
-dep_version() {
-  sed -n 's/^bazel_dep(name = "'"$1"'", version = "\([^"]*\)").*/\1/p' MODULE.bazel | head -1
-}
+# The simulators' versions, from MODULE.bazel. NVC is an http_archive,
+# not a module. Every simulator that runs must have one.
 declare -A version=(
-  [verilator]="$(dep_version verilator)"
-  [iverilog]="$(dep_version iverilog)"
-  [xezim]="$(dep_version xezim)"
-  [ghdl]="$(dep_version ghdl)"
-  [nvc]="$(dep_version nvc)"
+  [verilator]="$(dep_version verilator MODULE.bazel)"
+  [iverilog]="$(dep_version iverilog MODULE.bazel)"
+  [xezim]="$(dep_version xezim MODULE.bazel)"
+  [ghdl]="$(dep_version ghdl MODULE.bazel)"
+  [nvc]="$(archive_version nvc MODULE.bazel)"
 )
+for t in "${targets[@]}"; do
+  read -r _ _ sim _ <<<"$(parse_label "$t")"
+  if [[ -z "${version[$sim]:-}" ]]; then
+    echo "no version for $sim in MODULE.bazel" >&2
+    exit 2
+  fi
+done
 
 sibling="$(expand_cpulist < "$SYSFS_CPU/cpu$core/topology/thread_siblings_list" |
   grep -v -x "$core" | head -1 || true)"

@@ -75,5 +75,24 @@ done
 check "other cpus" "$(other_cpus 2 3)" "0,1"
 check "other cpus, no sibling" "$(other_cpus 2 none)" "0,1,3"
 
+# Simulator versions, from a MODULE.bazel.
+cat > "$d/MODULE.bazel" <<'EOF'
+bazel_dep(name = "ghdl", version = "6.0.0.bcr.5")
+bazel_dep(name = "verilator", version = "5.046.bcr.6", dev_dependency = True)
+http_archive(
+    name = "nvc_linux_x86_64",
+    strip_prefix = "nvc-1.22.0-324ed157-r2-linux-x86_64",
+)
+http_archive(
+	strip_prefix = "other-1.0-linux-x86_64"
+)
+EOF
+check "dep version" "$(dep_version ghdl "$d/MODULE.bazel")" "6.0.0.bcr.5"
+check "dep version, more args" "$(dep_version verilator "$d/MODULE.bazel")" "5.046.bcr.6"
+check "dep version missing" "$(dep_version xezim "$d/MODULE.bazel")" ""
+check "archive version" "$(archive_version nvc "$d/MODULE.bazel")" "1.22.0-324ed157-r2"
+check "archive version, tab, no comma" "$(archive_version other "$d/MODULE.bazel")" "1.0"
+check "archive version missing" "$(archive_version ghdl "$d/MODULE.bazel")" ""
+
 [[ $fail -eq 0 ]] && echo PASS
 exit $fail
