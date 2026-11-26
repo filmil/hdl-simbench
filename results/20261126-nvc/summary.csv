@@ -1,0 +1,2 @@
+host,simulator,simulator_version,design,case,max_cycles,state,runs,kept,cycles,resolution_limited,compile_s,compile_s_min,compile_s_max,run_s,run_s_min,run_s_max,total_s,total_s_min,total_s_max,cycles_per_s,cycles_per_s_min,cycles_per_s_max,run_maxrss_kib,run_maxrss_kib_min,run_maxrss_kib_max,git_commit,git_dirty,lock_sha256
+i7-7700,nvc,,vhdl,coremark,,ok,5,5,1252946,False,0.57,0.55,0.59,59.46,59.15,60.14,60.03,59.73,60.69,21072.1,20833.8,21182.5,101628.0,101192.0,101784.0,f53c92a,clean,205727375353

@@ -18,7 +18,7 @@ from contextlib import redirect_stdout
 import summarize_runs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CAMPAIGNS = sorted(d for d in os.listdir(HERE) if d.isdigit() and os.path.isdir(os.path.join(HERE, d)))
+CAMPAIGNS = sorted(d for d in os.listdir(HERE) if d[:8].isdigit() and os.path.isdir(os.path.join(HERE, d)))
 
 
 def _runs(campaign):
