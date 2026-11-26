@@ -81,7 +81,10 @@ no rate at all, which the tables show as ``n/a''.
 summarized.
 \end{itemize}
 For short simulations the total decides which simulator is faster; for
-long ones, cycles per second.
+long ones, cycles per second. Simulators split their work between compile
+and run differently: GHDL's mcode back end generates the design's code
+when the run starts, so its run time includes that work, and NVC's own
+statistics do not show how much of its code generation falls in the run.
 
 \section{Results}
 
