@@ -10,6 +10,7 @@ summary.csv), commands/, summary.csv and summary.md.
 """
 
 import csv
+import re
 import io
 import os
 import unittest
@@ -18,7 +19,15 @@ from contextlib import redirect_stdout
 import summarize_runs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CAMPAIGNS = sorted(d for d in os.listdir(HERE) if d[:8].isdigit() and os.path.isdir(os.path.join(HERE, d)))
+# A campaign directory is named <yyyymmdd> or <yyyymmdd>-<suffix>.
+CAMPAIGN_NAME = re.compile(r"\d{8}(?:-[a-z0-9][a-z0-9-]*)?")
+
+
+def is_campaign(name):
+    return CAMPAIGN_NAME.fullmatch(name) is not None
+
+
+CAMPAIGNS = sorted(d for d in os.listdir(HERE) if is_campaign(d) and os.path.isdir(os.path.join(HERE, d)))
 
 
 def _runs(campaign):
@@ -38,6 +47,13 @@ class ResultsTest(unittest.TestCase):
 
     def test_there_are_campaigns(self):
         self.assertIn("20261125", CAMPAIGNS)
+        self.assertIn("20261126-nvc", CAMPAIGNS)
+
+    def test_campaign_names(self):
+        for good in ["20261125", "20261126-nvc", "20261201-sv-2"]:
+            self.assertTrue(is_campaign(good), good)
+        for bad in ["2026", "20261126wip", "20261126-", "__pycache__", "x20261126"]:
+            self.assertFalse(is_campaign(bad), bad)
 
     def test_summary_follows_from_runs(self):
         for c in CAMPAIGNS:

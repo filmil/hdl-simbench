@@ -1,5 +1,5 @@
 == nvc ... -e (with stats)
-== args: --std=2008 -L <rf>/_main/../+http_archive+nvc_linux_x86_64/lib/nvc --work=work:lib/work -L lib -e -V --stats -O2 coremark_tb
+== args: --std=2008 -L <execroot>/bazel-out/k8-opt/bin/bench/vhdl/coremark_nvc_test.runfiles/_main/../+http_archive+nvc_linux_x86_64/lib/nvc --work=work:lib/work -L lib -e -V --stats -O2 coremark_tb
 ** Note: initialising [2ms +20224kB]
 ** Note: loading top-level unit [0ms +512kB]
 
@@ -45,7 +45,7 @@ NEORV32.NEORV32_PRIM_MUL-NEORV32_PRIM_MUL_RTL               1          1
 ** Note: saving library [2ms +0kB]
 == wall 0.28 s, user 0.24 s, sys 0.03 s, maxrss 91000 KiB
 == nvc ... -r (with stats)
-== args: --std=2008 -L <rf>/_main/../+http_archive+nvc_linux_x86_64/lib/nvc --work=work:lib/work -L lib -r --stats coremark_tb --ieee-warnings=off --exit-severity=error
+== args: --std=2008 -L <execroot>/bazel-out/k8-opt/bin/bench/vhdl/coremark_nvc_test.runfiles/_main/../+http_archive+nvc_linux_x86_64/lib/nvc --work=work:lib/work -L lib -r --stats coremark_tb --ieee-warnings=off --exit-severity=error
 ** Note: 0ms+0: [NEORV32] The NEORV32 RISC-V Processor (v01.13.08.00), github.com/stnolting/neorv32
    Process :coremark_tb:dut:config_checks:_p0 at <execroot>/bazel-out/k8-opt/bin/bench/vhdl/coremark_nvc_test.runfiles/_main/third_party/neorv32/rtl/core/neorv32_top.vhd:403
 ** Note: 0ms+0: [NEORV32] Processor Configuration: CPU (single-core) IMEM-ROM DMEM CLINT GPIO UART0 SYSINFO 
