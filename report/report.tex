@@ -1,0 +1,101 @@
+% Copyright 2026 hdl-simbench authors.
+% SPDX-License-Identifier: Apache-2.0
+%
+% The hdl-simbench report. Every number in it comes from generated files:
+% tables.tex and provenance.tex (//tools:report_tables, from each
+% campaign's summary.csv) and version.tex (the release tag, or
+% "unreleased"). Do not type numbers into this file.
+\documentclass[11pt]{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{graphicx}
+% lscape, not pdflscape, which the hermetic TinyTeX lacks: the landscape
+% pages are set sideways on portrait pages.
+\usepackage{lscape}
+
+\input{version}
+
+\title{hdl-simbench: open-source HDL simulators on the same designs}
+\author{HDL Factory}
+\date{\ReportVersion}
+
+\begin{document}
+\maketitle
+
+\section{What this measures}
+
+hdl-simbench runs the same designs under several open-source simulators,
+built the same way, on the same machine, and times them. SystemVerilog
+designs run under Verilator, Icarus Verilog and xezim; VHDL designs run
+under GHDL and NVC. Simulators are compared only within a language.
+
+Commercial simulators are not in the study: their licenses forbid
+publishing benchmark results.
+
+The VHDL case runs CoreMark\textsuperscript{\textregistered}, a
+trademark of EEMBC, on the NEORV32 RISC-V processor as a workload for the
+simulators. It measures the simulators, not the simulated processor, and
+its numbers are not CoreMark scores.
+
+\section{How the simulators are built}
+
+Every simulator and every tool that builds one comes from a pinned
+version through Bazel. A simulator binary may take only glibc from the
+machine it runs on, except for host libraries a campaign explicitly
+allowed; every run's command record names each allowed library with its
+path and checksum, and the campaign notes say why.
+C and C++ are compiled by clang from a pinned LLVM release against a
+pinned Debian sysroot (glibc 2.31), optimized and without debug
+information. Each timed run records every simulator command line, and each
+simulator binary's dynamic dependencies are checked on every run; a binary
+that needs anything else from the host fails the run. The
+repository's \texttt{README.md} and \texttt{bench/vhdl/README.md} list
+every compiler and simulator flag.
+
+\section{How a run counts}
+
+Timed runs pin the simulation to one physical core, with its
+hyperthread sibling idle, on a machine whose CI runners are paused for the
+campaign. Around each run the bench records the machine's load, the busy
+share of the pinned core, of its sibling and of the other cores, and CPU
+steal.
+
+These rules were fixed before any result was seen, and apply unchanged:
+\begin{itemize}
+\item A run is dropped if its pinned core's sibling was busy for more than
+a quarter of the run, or if CPU steal was over one percent.
+\item A cell is one simulator version on one host, running one case of
+one design at one cycle cap. It reports the median of its kept runs, with
+their minimum and maximum, of compile time, run time, their total, cycles
+per second of the run, and peak memory of the run.
+\item A cell that loses more than a third of its runs is not reported; it
+needs more runs.
+\item A cell with a failing run is reported as failing.
+\item A rate from runs under one second, or with a run that the timer
+measured as zero, is marked with a dagger ($\dagger$): wall time is
+counted in hundredths of a second. With a run measured as zero there is
+no rate at all, which the tables show as ``n/a''.
+\item A cell whose runs simulated different numbers of cycles is not
+summarized.
+\end{itemize}
+For short simulations the total decides which simulator is faster; for
+long ones, cycles per second.
+
+\section{Results}
+
+The tables follow on landscape pages, one per campaign, host and
+language. A dagger ($\dagger$) marks a resolution-limited rate.
+
+\begin{landscape}
+\input{tables}
+\end{landscape}
+
+\section{Provenance}
+
+The cells ran at these commits of the repository, with these lockfiles:
+
+\input{provenance}
+
+The raw per-run files, the command lines of every run, and each
+campaign's notes are released with this report.
+
+\end{document}

@@ -1,0 +1,38 @@
+# The report: a PDF built with the hermetic LaTeX toolchain (TinyTeX,
+# registered in MODULE.bazel), from each campaign's summary.csv. No number
+# is typed into report.tex; see //tools:report_tables.
+
+load("@rules_latex_host//latex:defs.bzl", "latex_document")
+
+genrule(
+    name = "tables",
+    srcs = ["//results:summaries"],
+    outs = [
+        "tables.tex",
+        "provenance.tex",
+    ],
+    cmd = "$(execpath //tools:report_tables) --out $(execpath tables.tex) " +
+          "--provenance $(execpath provenance.tex) $(execpaths //results:summaries)",
+    tools = ["//tools:report_tables"],
+)
+
+# The release tag, given by the release workflow with
+# --define=REPORT_VERSION=<tag>, which checks that it is v<digits and
+# dots>[-<letters, digits, dots>]: nothing LaTeX or the shell would read
+# specially. Other builds say "unreleased" (.bazelrc), so that they stay
+# cacheable.
+genrule(
+    name = "version",
+    outs = ["version.tex"],
+    cmd = "printf '%s\\n' '\\newcommand{\\ReportVersion}{$(REPORT_VERSION)}' > $@",
+)
+
+latex_document(
+    name = "report",
+    main = "report.tex",
+    deps = [
+        ":provenance.tex",
+        ":tables.tex",
+        ":version.tex",
+    ],
+)

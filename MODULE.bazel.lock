@@ -433,6 +433,8 @@
     "https://raw.githubusercontent.com/filmil/bazel-registry/main/modules/rules_jvm_external/6.3/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/filmil/bazel-registry/main/modules/rules_jvm_external/6.7/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/filmil/bazel-registry/main/modules/rules_kotlin/1.9.6/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/filmil/bazel-registry/main/modules/rules_latex_host/0.3.1/MODULE.bazel": "4c57ee5bb52cba36bc92e8cec88af8eb43a5197409e68608a69e574d184dc34c",
+    "https://raw.githubusercontent.com/filmil/bazel-registry/main/modules/rules_latex_host/0.3.1/source.json": "699f6709f6aab8b0f1341fb05efc5bc3c39581b5b88b67ec4b0648b295c09ae4",
     "https://raw.githubusercontent.com/filmil/bazel-registry/main/modules/rules_license/0.0.3/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/filmil/bazel-registry/main/modules/rules_license/0.0.7/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/filmil/bazel-registry/main/modules/rules_license/1.0.0/MODULE.bazel": "not found",
