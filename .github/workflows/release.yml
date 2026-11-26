@@ -2,12 +2,17 @@
 # was made from.
 #
 # A release is made:
-#   - by itself, for every push to main that changes what the report is
-#     made from (results, the report source, the tools that write its
-#     tables). The tag is v<UTC date>, e.g. v2026.11.26, with .1, .2, ...
-#     added for further releases on the same day.
-#   - for a tag v<version> that someone pushes.
-#   - by hand, from the Actions tab (workflow_dispatch), for main as it is.
+#   - for a tag v<version> that someone pushes. The first release, and
+#     every minor or major version, starts this way.
+#   - by itself, for a push to main that changes what the report is made
+#     from (results, the report source, the tools that write its tables).
+#     Its tag is the highest vX.Y.Z tag with Z one higher: after v1.0.0
+#     comes v1.0.1. With no vX.Y.Z tag yet, nothing is released.
+#   - by hand, from the Actions tab (workflow_dispatch) on main, the same
+#     way as for a push to main.
+# A commit that already has a v tag gets no second one; the run skips.
+# When pushes to main come faster than releases, a run still waiting may
+# be dropped for a newer one; the newer release has its changes too.
 #
 # Assets:
 #   hdl-simbench-<tag>.pdf          the report (//report:report)
@@ -38,9 +43,10 @@ on:
 permissions:
   contents: write
 
-# Releases are made one at a time, so two of them never pick the same tag.
+# Releases from main run one at a time, so two never pick the same tag.
+# Each pushed tag has a group of its own, so no main push can drop it.
 concurrency:
-  group: release
+  group: release-${{ github.ref_type == 'tag' && github.ref || 'main' }}
   cancel-in-progress: false
 
 jobs:
@@ -49,44 +55,53 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      # A pushed tag is used as it is. Otherwise the tag is the UTC date,
-      # with the first free .N suffix. A commit that already has a release
-      # tag (a re-run) gets no second one.
+      # Tags are read with ls-remote: no tagged history is fetched.
       - name: Pick the tag
+        id: pick
         env:
+          EVENT: ${{ github.event_name }}
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
         run: |
           set -o errexit -o nounset -o pipefail
-          if [[ "${REF_TYPE}" == "tag" ]]; then
+          skip() {
+            echo "::notice::$1"
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          }
+          if [[ "${EVENT}" == "push" && "${REF_TYPE}" == "tag" ]]; then
             tag="${REF_NAME}"
           else
-            if [[ "${REF_NAME}" != "main" ]]; then
+            if [[ "${REF_TYPE}" != "branch" || "${REF_NAME}" != "main" ]]; then
               echo "releases are made from main, not ${REF_NAME}" >&2
               exit 1
             fi
-            git fetch --quiet --tags origin
-            if existing="$(git tag --points-at HEAD --list 'v[0-9]*' | head -n 1)" \
-                && [[ -n "${existing}" ]]; then
-              echo "HEAD is already released as ${existing}" >&2
-              exit 1
+            # "<sha> refs/tags/<name>" and, for annotated tags,
+            # "<commit sha> refs/tags/<name>^{}".
+            refs="$(git ls-remote --tags origin)"
+            released="$(awk -v sha="${SHA}" '$1 == sha && $2 ~ /^refs\/tags\/v[0-9]/ {
+                sub(/^refs\/tags\//, "", $2); sub(/\^\{\}$/, "", $2); print $2; exit }' <<<"${refs}")"
+            if [[ -n "${released}" ]]; then
+              skip "${SHA} is already released as ${released}"
             fi
-            base="v$(date -u +%Y.%m.%d)"
-            tag="${base}"
-            n=0
-            while git rev-parse --quiet --verify "refs/tags/${tag}" >/dev/null; do
-              n=$((n + 1))
-              tag="${base}.${n}"
-            done
+            latest="$(awk '{ sub(/^refs\/tags\//, "", $2); print $2 }' <<<"${refs}" \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+            if [[ -z "${latest}" ]]; then
+              skip "no vX.Y.Z tag yet: the first release is a pushed tag"
+            fi
+            IFS=. read -r major minor patch <<<"${latest#v}"
+            tag="v${major}.${minor}.$((patch + 1))"
           fi
           if ! [[ "${tag}" =~ ^v[0-9]+(\.[0-9]+)*(-[A-Za-z0-9.]+)?$ ]]; then
             echo "tag ${tag} is not v<digits and dots>[-<letters, digits, dots>]" >&2
             exit 1
           fi
           echo "TAG=${tag}" >> "${GITHUB_ENV}"
-          echo "release ${tag} of $(git rev-parse HEAD)"
+          echo "release ${tag} of ${SHA}"
 
       - uses: bazel-contrib/setup-bazel@4fd964a13a440a8aeb0be47350db2fc640f19ca8 # 0.15.0
+        if: steps.pick.outputs.skip != 'true'
         with:
           bazelisk-cache: true
           repository-cache: true
@@ -94,12 +109,15 @@ jobs:
       # The release must come from data that still follows from its
       # per-run files.
       - name: Check the results
+        if: steps.pick.outputs.skip != 'true'
         run: bazel test --lockfile_mode=error //results:results_test //tools:report_tables_test //tools:summarize_runs_test
 
       - name: Build the report
+        if: steps.pick.outputs.skip != 'true'
         run: bazel build --lockfile_mode=error "--define=REPORT_VERSION=${TAG}" //report:report
 
       - name: Collect the assets
+        if: steps.pick.outputs.skip != 'true'
         run: |
           set -o errexit -o nounset -o pipefail
           mkdir out
@@ -111,10 +129,20 @@ jobs:
           (cd out && sha256sum * > SHA256SUMS)
           cat out/SHA256SUMS
 
-      # For a branch push or a manual run this also creates the tag, on
-      # the commit that was built. A tag made with the workflow's own token
-      # starts no further workflow run.
+      # The tag was free when picked; check again after the build, since
+      # the release would otherwise attach to a tag on another commit.
+      - name: Check the tag is still free
+        if: steps.pick.outputs.skip != 'true' && github.ref_type != 'tag'
+        run: |
+          if [[ -n "$(git ls-remote --tags origin "refs/tags/${TAG}")" ]]; then
+            echo "tag ${TAG} appeared during the build; not releasing" >&2
+            exit 1
+          fi
+
+      # For main this also creates the tag, on the commit that was built.
+      # A tag made with the workflow's own token starts no further run.
       - name: Publish the release
+        if: steps.pick.outputs.skip != 'true'
         uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
         with:
           tag: ${{ env.TAG }}
