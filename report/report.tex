@@ -34,7 +34,10 @@ publishing benchmark results.
 The VHDL case runs CoreMark\textsuperscript{\textregistered}, a
 trademark of EEMBC, on the NEORV32 RISC-V processor as a workload for the
 simulators. It measures the simulators, not the simulated processor, and
-its numbers are not CoreMark scores.
+its numbers are not CoreMark scores. One iteration runs in far less
+than CoreMark's 10 simulated seconds, so its output reports an error for
+the short run; its checksums are those of a correct run, and the bench
+checks them.
 
 \section{How the simulators are built}
 

@@ -77,10 +77,12 @@ built from source, and the bench does not use it.
 | Run | `nvc --std=2008 -L <std libs> --work=work:lib/work -L lib -r coremark_tb --ieee-warnings=off --exit-severity=error` |
 
 `-e` without `--jit` is NVC's ahead-of-time elaboration, with LLVM code
-generation at `-O2`, its default level, written out. How much of the code
-generation NVC defers to `-r` is to be checked with its own statistics
-before the numbers are published; until then, compare the sum of
-"compile" and "run".
+generation at `-O2`, its default level, written out. NVC's own
+statistics (`-e --stats`, `-r --stats`; campaign 20261126b,
+`nvc-stats.log`) put elaboration with code generation at 0.27 s and the
+run at 91 ms of set-up plus 59.5 s of simulation. They do not show
+whether any code is generated during the run, so, as for GHDL, compare
+the sum of "compile" and "run".
 The run options are the closest NVC has to GHDL's: `--ieee-warnings=off`
 silences warnings from the IEEE libraries (GHDL's `--ieee-asserts=disable`
 silences all of their assertions; an IEEE library error still stops NVC),

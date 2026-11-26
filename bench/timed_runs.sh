@@ -151,7 +151,9 @@ declare -A version=(
   [iverilog]="$(dep_version iverilog)"
   [xezim]="$(dep_version xezim)"
   [ghdl]="$(dep_version ghdl)"
-  [nvc]="$(dep_version nvc)"
+  # NVC is an http_archive, not a module: its version is in the
+  # archive's directory name, nvc-<version>-linux-x86_64.
+  [nvc]="$(sed -n 's/^ *strip_prefix = "nvc-\(.*\)-linux-x86_64",$/\1/p' MODULE.bazel | head -1)"
 )
 
 sibling="$(expand_cpulist < "$SYSFS_CPU/cpu$core/topology/thread_siblings_list" |

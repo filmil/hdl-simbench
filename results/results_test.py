@@ -12,13 +12,17 @@ summary.csv), commands/, summary.csv and summary.md.
 import csv
 import io
 import os
+import re
 import unittest
 from contextlib import redirect_stdout
 
 import summarize_runs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CAMPAIGNS = sorted(d for d in os.listdir(HERE) if d.isdigit() and os.path.isdir(os.path.join(HERE, d)))
+# A campaign is named by its date, with a letter for further campaigns
+# on the same day (20261126, 20261126b).
+CAMPAIGNS = sorted(d for d in os.listdir(HERE)
+                   if re.fullmatch(r"[0-9]{8}[a-z]?", d) and os.path.isdir(os.path.join(HERE, d)))
 
 
 def _runs(campaign):
@@ -38,6 +42,7 @@ class ResultsTest(unittest.TestCase):
 
     def test_there_are_campaigns(self):
         self.assertIn("20261125", CAMPAIGNS)
+        self.assertIn("20261126b", CAMPAIGNS)
 
     def test_summary_follows_from_runs(self):
         for c in CAMPAIGNS:
