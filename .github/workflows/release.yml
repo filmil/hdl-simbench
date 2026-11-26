@@ -1,5 +1,18 @@
-# A release of the study: pushing a tag v<version> builds the report PDF
-# and publishes it with the raw data it was made from.
+# A release of the study: the report PDF, published with the raw data it
+# was made from.
+#
+# A release is made:
+#   - for a tag v<version> that someone pushes. The first release, and
+#     every minor or major version, starts this way.
+#   - by itself, for a push to main that changes what the report is made
+#     from (results, the report source, the tools that write its tables).
+#     Its tag is the highest vX.Y.Z tag with Z one higher: after v1.0.0
+#     comes v1.0.1. With no vX.Y.Z tag yet, nothing is released.
+#   - by hand, from the Actions tab (workflow_dispatch) on main, the same
+#     way as for a push to main.
+# A commit that already has a v tag gets no second one; the run skips.
+# When pushes to main come faster than releases, a run still waiting may
+# be dropped for a newer one; the newer release has its changes too.
 #
 # Assets:
 #   hdl-simbench-<tag>.pdf          the report (//report:report)
@@ -16,29 +29,79 @@ name: release
 
 on:
   push:
+    branches: [main]
+    # Path filters apply to the branch push only; a pushed tag always
+    # releases.
+    paths:
+      - "results/**"
+      - "report/**"
+      - "tools/report_tables.py"
+      - "tools/summarize_runs.py"
     tags: ["v[0-9]*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+# Releases from main run one at a time, so two never pick the same tag.
+# Each pushed tag has a group of its own, so no main push can drop it.
+concurrency:
+  group: release-${{ github.ref_type == 'tag' && github.ref || 'main' }}
+  cancel-in-progress: false
+
 jobs:
   report:
     runs-on: ubuntu-24.04
-    env:
-      # The tag reaches the shell only through this variable, and only
-      # after the first step checks its form.
-      TAG: ${{ github.ref_name }}
     steps:
-      - name: Check the tag
-        run: |
-          if ! [[ "${TAG}" =~ ^v[0-9]+(\.[0-9]+)*(-[A-Za-z0-9.]+)?$ ]]; then
-            echo "tag ${TAG} is not v<digits and dots>[-<letters, digits, dots>]" >&2
-            exit 1
-          fi
-
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
+      # Tags are read with ls-remote: no tagged history is fetched.
+      - name: Pick the tag
+        id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -o errexit -o nounset -o pipefail
+          skip() {
+            echo "::notice::$1"
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          }
+          if [[ "${EVENT}" == "push" && "${REF_TYPE}" == "tag" ]]; then
+            tag="${REF_NAME}"
+          else
+            if [[ "${REF_TYPE}" != "branch" || "${REF_NAME}" != "main" ]]; then
+              echo "releases are made from main, not ${REF_NAME}" >&2
+              exit 1
+            fi
+            # "<sha> refs/tags/<name>" and, for annotated tags,
+            # "<commit sha> refs/tags/<name>^{}".
+            refs="$(git ls-remote --tags origin)"
+            released="$(awk -v sha="${SHA}" '$1 == sha && $2 ~ /^refs\/tags\/v[0-9]/ {
+                sub(/^refs\/tags\//, "", $2); sub(/\^\{\}$/, "", $2); print $2; exit }' <<<"${refs}")"
+            if [[ -n "${released}" ]]; then
+              skip "${SHA} is already released as ${released}"
+            fi
+            latest="$(awk '{ sub(/^refs\/tags\//, "", $2); print $2 }' <<<"${refs}" \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+            if [[ -z "${latest}" ]]; then
+              skip "no vX.Y.Z tag yet: the first release is a pushed tag"
+            fi
+            IFS=. read -r major minor patch <<<"${latest#v}"
+            tag="v${major}.${minor}.$((patch + 1))"
+          fi
+          if ! [[ "${tag}" =~ ^v[0-9]+(\.[0-9]+)*(-[A-Za-z0-9.]+)?$ ]]; then
+            echo "tag ${tag} is not v<digits and dots>[-<letters, digits, dots>]" >&2
+            exit 1
+          fi
+          echo "TAG=${tag}" >> "${GITHUB_ENV}"
+          echo "release ${tag} of ${SHA}"
+
       - uses: bazel-contrib/setup-bazel@4fd964a13a440a8aeb0be47350db2fc640f19ca8 # 0.15.0
+        if: steps.pick.outputs.skip != 'true'
         with:
           bazelisk-cache: true
           repository-cache: true
@@ -46,12 +109,15 @@ jobs:
       # The release must come from data that still follows from its
       # per-run files.
       - name: Check the results
+        if: steps.pick.outputs.skip != 'true'
         run: bazel test --lockfile_mode=error //results:results_test //tools:report_tables_test //tools:summarize_runs_test
 
       - name: Build the report
+        if: steps.pick.outputs.skip != 'true'
         run: bazel build --lockfile_mode=error "--define=REPORT_VERSION=${TAG}" //report:report
 
       - name: Collect the assets
+        if: steps.pick.outputs.skip != 'true'
         run: |
           set -o errexit -o nounset -o pipefail
           mkdir out
@@ -63,13 +129,28 @@ jobs:
           (cd out && sha256sum * > SHA256SUMS)
           cat out/SHA256SUMS
 
+      # The tag was free when picked; check again after the build, since
+      # the release would otherwise attach to a tag on another commit.
+      - name: Check the tag is still free
+        if: steps.pick.outputs.skip != 'true' && github.ref_type != 'tag'
+        run: |
+          if [[ -n "$(git ls-remote --tags origin "refs/tags/${TAG}")" ]]; then
+            echo "tag ${TAG} appeared during the build; not releasing" >&2
+            exit 1
+          fi
+
+      # For main this also creates the tag, on the commit that was built.
+      # A tag made with the workflow's own token starts no further run.
       - name: Publish the release
+        if: steps.pick.outputs.skip != 'true'
         uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
         with:
-          tag: ${{ github.ref_name }}
+          tag: ${{ env.TAG }}
+          commit: ${{ github.sha }}
           artifacts: "out/*"
           body: |
-            The hdl-simbench report for ${{ github.ref_name }}, with the raw
-            data it was made from: every campaign's per-run CSV files, the
-            command line of every simulator run, the campaign notes and
-            summaries. SHA256SUMS lists the checksums of both files.
+            The hdl-simbench report ${{ env.TAG }}, made from commit
+            ${{ github.sha }}, with the raw data it was made from: every
+            campaign's per-run CSV files, the command line of every
+            simulator run, the campaign notes and summaries. SHA256SUMS
+            lists the checksums of both files.
