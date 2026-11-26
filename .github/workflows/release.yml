@@ -1,5 +1,13 @@
-# A release of the study: pushing a tag v<version> builds the report PDF
-# and publishes it with the raw data it was made from.
+# A release of the study: the report PDF, published with the raw data it
+# was made from.
+#
+# A release is made:
+#   - by itself, for every push to main that changes what the report is
+#     made from (results, the report source, the tools that write its
+#     tables). The tag is v<UTC date>, e.g. v2026.11.26, with .1, .2, ...
+#     added for further releases on the same day.
+#   - for a tag v<version> that someone pushes.
+#   - by hand, from the Actions tab (workflow_dispatch), for main as it is.
 #
 # Assets:
 #   hdl-simbench-<tag>.pdf          the report (//report:report)
@@ -16,27 +24,67 @@ name: release
 
 on:
   push:
+    branches: [main]
+    # Path filters apply to the branch push only; a pushed tag always
+    # releases.
+    paths:
+      - "results/**"
+      - "report/**"
+      - "tools/report_tables.py"
+      - "tools/summarize_runs.py"
     tags: ["v[0-9]*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+# Releases are made one at a time, so two of them never pick the same tag.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   report:
     runs-on: ubuntu-24.04
-    env:
-      # The tag reaches the shell only through this variable, and only
-      # after the first step checks its form.
-      TAG: ${{ github.ref_name }}
     steps:
-      - name: Check the tag
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # A pushed tag is used as it is. Otherwise the tag is the UTC date,
+      # with the first free .N suffix. A commit that already has a release
+      # tag (a re-run) gets no second one.
+      - name: Pick the tag
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          if ! [[ "${TAG}" =~ ^v[0-9]+(\.[0-9]+)*(-[A-Za-z0-9.]+)?$ ]]; then
-            echo "tag ${TAG} is not v<digits and dots>[-<letters, digits, dots>]" >&2
+          set -o errexit -o nounset -o pipefail
+          if [[ "${REF_TYPE}" == "tag" ]]; then
+            tag="${REF_NAME}"
+          else
+            if [[ "${REF_NAME}" != "main" ]]; then
+              echo "releases are made from main, not ${REF_NAME}" >&2
+              exit 1
+            fi
+            git fetch --quiet --tags origin
+            if existing="$(git tag --points-at HEAD --list 'v[0-9]*' | head -n 1)" \
+                && [[ -n "${existing}" ]]; then
+              echo "HEAD is already released as ${existing}" >&2
+              exit 1
+            fi
+            base="v$(date -u +%Y.%m.%d)"
+            tag="${base}"
+            n=0
+            while git rev-parse --quiet --verify "refs/tags/${tag}" >/dev/null; do
+              n=$((n + 1))
+              tag="${base}.${n}"
+            done
+          fi
+          if ! [[ "${tag}" =~ ^v[0-9]+(\.[0-9]+)*(-[A-Za-z0-9.]+)?$ ]]; then
+            echo "tag ${tag} is not v<digits and dots>[-<letters, digits, dots>]" >&2
             exit 1
           fi
-
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+          echo "TAG=${tag}" >> "${GITHUB_ENV}"
+          echo "release ${tag} of $(git rev-parse HEAD)"
 
       - uses: bazel-contrib/setup-bazel@4fd964a13a440a8aeb0be47350db2fc640f19ca8 # 0.15.0
         with:
@@ -63,13 +111,18 @@ jobs:
           (cd out && sha256sum * > SHA256SUMS)
           cat out/SHA256SUMS
 
+      # For a branch push or a manual run this also creates the tag, on
+      # the commit that was built. A tag made with the workflow's own token
+      # starts no further workflow run.
       - name: Publish the release
         uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
         with:
-          tag: ${{ github.ref_name }}
+          tag: ${{ env.TAG }}
+          commit: ${{ github.sha }}
           artifacts: "out/*"
           body: |
-            The hdl-simbench report for ${{ github.ref_name }}, with the raw
-            data it was made from: every campaign's per-run CSV files, the
-            command line of every simulator run, the campaign notes and
-            summaries. SHA256SUMS lists the checksums of both files.
+            The hdl-simbench report ${{ env.TAG }}, made from commit
+            ${{ github.sha }}, with the raw data it was made from: every
+            campaign's per-run CSV files, the command line of every
+            simulator run, the campaign notes and summaries. SHA256SUMS
+            lists the checksums of both files.
